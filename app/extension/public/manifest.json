@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Audio",
+  "version": "0.1.0",
+  "description": "Extract audio from YouTube videos and download it as an MP3 file.",
+  "action": {
+    "default_title": "YouTube Audio",
+    "default_popup": "index.html"
+  }
+}
