@@ -1,0 +1,39 @@
+# Dependencies (all packages)
+node_modules/
+
+# Generated build output and test reports
+dist/
+dist-ssr/
+build/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Tool caches
+.cache/
+.vite/
+.eslintcache
+
+# Logs and process files
+logs/
+*.log
+*.pid
+*.pid.lock
+
+# Local environment; keep safe templates versioned
+.env
+.env.*
+!.env.example
+*.local
+
+# Local editor configuration
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
