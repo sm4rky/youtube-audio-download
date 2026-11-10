@@ -9,7 +9,7 @@ import { AppModule } from './../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { validateEnvironment } from '../src/config/environment';
 
-describe('AppController (e2e)', () => {
+describe('Application bootstrap (e2e)', () => {
   let app: NestFastifyApplication;
 
   beforeEach(async () => {
@@ -30,12 +30,6 @@ describe('AppController (e2e)', () => {
     await app.getHttpAdapter().getInstance().ready();
   });
 
-  it('/api/v1 (GET) preserves the starter endpoint', async () => {
-    const response = await app.inject({ method: 'GET', url: '/api/v1' });
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toBe('Hello World!');
-  });
-
   it('/api/v1/health works without a Genius token', async () => {
     expect(app.get(ConfigService).get('GENIUS_ACCESS_TOKEN')).toBe('');
     const response = await app.inject({ method: 'GET', url: '/api/v1/health' });
@@ -49,6 +43,21 @@ describe('AppController (e2e)', () => {
   it('does not expose health outside the global prefix', async () => {
     const response = await app.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(404);
+  });
+
+  it('returns a safe search configuration error without a token while health remains available', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/songs/search?q=Hello',
+    });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      statusCode: 503,
+      code: 'GENIUS_NOT_CONFIGURED',
+      message: 'Song search is not configured.',
+    });
+    const health = await app.inject({ method: 'GET', url: '/api/v1/health' });
+    expect(health.statusCode).toBe(200);
   });
 
   it('allows the development origin without credentials', async () => {

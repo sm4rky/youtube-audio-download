@@ -7,6 +7,7 @@ describe('environment configuration', () => {
       PORT: 3001,
       HOST: '127.0.0.1',
       CORS_ORIGINS: ['http://localhost:5173'],
+      GENIUS_TIMEOUT_MS: 8000,
     });
   });
 
@@ -21,6 +22,7 @@ describe('environment configuration', () => {
       PORT: 65535,
       HOST: '0.0.0.0',
       CORS_ORIGINS: ['http://localhost:5173', 'chrome-extension://example'],
+      GENIUS_TIMEOUT_MS: 8000,
     });
   });
 
@@ -38,4 +40,19 @@ describe('environment configuration', () => {
       'without wildcards',
     );
   });
+
+  it('normalizes a configured Genius timeout', () => {
+    expect(
+      validateEnvironment({ GENIUS_TIMEOUT_MS: '12000' }).GENIUS_TIMEOUT_MS,
+    ).toBe(12000);
+  });
+
+  it.each(['', ' ', 'abc', '1.5', '0', '-1', '30001', Infinity])(
+    'rejects invalid Genius timeout %s',
+    (GENIUS_TIMEOUT_MS) => {
+      expect(() => validateEnvironment({ GENIUS_TIMEOUT_MS })).toThrow(
+        'GENIUS_TIMEOUT_MS must be an integer between 1 and 30000.',
+      );
+    },
+  );
 });

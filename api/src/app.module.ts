@@ -1,10 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { resolve } from 'node:path';
 import { validateEnvironment } from './config/environment';
 import { HealthModule } from './health/health.module';
+import { SongsModule } from './songs/songs.module';
 
 @Module({
   imports: [
@@ -14,8 +13,7 @@ import { HealthModule } from './health/health.module';
       validate: validateEnvironment,
     }),
     HealthModule,
+    SongsModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

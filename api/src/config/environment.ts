@@ -29,10 +29,25 @@ export function validateEnvironment(environment: Record<string, unknown>) {
     );
   }
 
+  const rawTimeout = environment.GENIUS_TIMEOUT_MS ?? 8000;
+  const timeout =
+    typeof rawTimeout === 'string' ? Number(rawTimeout) : rawTimeout;
+  if (
+    typeof timeout !== 'number' ||
+    !Number.isInteger(timeout) ||
+    timeout < 1 ||
+    timeout > 30000
+  ) {
+    throw new Error(
+      'GENIUS_TIMEOUT_MS must be an integer between 1 and 30000.',
+    );
+  }
+
   return {
     ...environment,
     PORT: port,
     HOST: host.trim(),
     CORS_ORIGINS: origins,
+    GENIUS_TIMEOUT_MS: timeout,
   };
 }
