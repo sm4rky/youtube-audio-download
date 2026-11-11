@@ -16,9 +16,9 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { validateEnvironment } from '../src/config/environment';
 import { GeniusService } from '../src/genius/genius.service';
-import type { GeniusSong } from '../src/genius/types/genius-song';
+import type { GeniusSearchSong } from '../src/genius/types/genius-search-song';
 
-const song: GeniusSong = {
+const song: GeniusSearchSong = {
   id: 123,
   title: 'Hello',
   primary_artist: { name: 'Adele' },

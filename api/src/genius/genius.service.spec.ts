@@ -309,6 +309,141 @@ describe('GeniusService HTTP boundary', () => {
     expect(song.url).toBeNull();
   });
 
+  it('loads detail from the official endpoint and validates album plus ISO release date', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        meta: { status: 200 },
+        response: {
+          song: {
+            ...songHit.result,
+            release_date: '2026-10-21',
+            album: {
+              id: 77,
+              name: 'Fixture album',
+              cover_art_url: 'https://images.genius.com/album.jpg',
+            },
+            primary_artists: [
+              { id: 1, name: 'Adele' },
+              { id: 2, name: 'Second' },
+              { id: 1, name: 'Duplicate' },
+              { id: 0, name: 'Invalid' },
+            ],
+            featured_artists: [{ id: 3, name: 'Guest' }],
+          },
+        },
+      }),
+    );
+    const result = await service.getDetail(123);
+    expect(fetchMock.mock.calls[0][0]).toEqual(
+      new URL('https://api.genius.com/songs/123'),
+    );
+    expect(result).toMatchObject({
+      album: {
+        id: 77,
+        name: 'Fixture album',
+        cover_art_url: 'https://images.genius.com/album.jpg',
+      },
+      release_date_components: { year: 2026 },
+      primary_artists: [
+        { id: 1, name: 'Adele' },
+        { id: 2, name: 'Second' },
+      ],
+      featured_artists: [{ id: 3, name: 'Guest' }],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    null,
+    { id: 0, name: 'Bad' },
+    { id: 5, name: ' ' },
+    { id: '5', name: 'Bad' },
+  ])(
+    'keeps detail usable with invalid/missing optional album %#',
+    async (album) => {
+      fetchMock.mockResolvedValue(
+        Response.json({
+          meta: { status: 200 },
+          response: { song: { ...songHit.result, album } },
+        }),
+      );
+      const result = await service.getDetail(123);
+      expect(result.album).toBeNull();
+      expect(result.release_date_components).toBeNull();
+    },
+  );
+
+  it.each(['2026-02-30', 'unknown', '2026', '0000-01-01'])(
+    'does not invent a year from an invalid detail date %s',
+    async (release_date) => {
+      fetchMock.mockResolvedValue(
+        Response.json({
+          meta: { status: 200 },
+          response: { song: { ...songHit.result, release_date } },
+        }),
+      );
+      expect((await service.getDetail(123)).release_date_components).toBeNull();
+    },
+  );
+
+  it.each([
+    [404, 404, 'SONG_NOT_FOUND'],
+    [401, 503, 'GENIUS_AUTH_FAILED'],
+    [403, 503, 'GENIUS_AUTH_FAILED'],
+    [429, 503, 'GENIUS_RATE_LIMITED'],
+    [500, 502, 'GENIUS_UPSTREAM_ERROR'],
+  ])(
+    'handles detail upstream HTTP %s',
+    async (status, expectedStatus, code) => {
+      fetchMock.mockResolvedValue(
+        new Response(null, { status: Number(status) }),
+      );
+      await expect(service.getDetail(123)).rejects.toMatchObject({
+        status: expectedStatus,
+        response: { code },
+      });
+    },
+  );
+
+  it.each([
+    { meta: { status: 200 }, response: {} },
+    {
+      meta: { status: 200 },
+      response: { song: { ...songHit.result, id: 999 } },
+    },
+    { meta: { status: 200 }, response: { song: { id: 123 } } },
+    { response: { song: songHit.result } },
+  ])('rejects malformed detail envelope or mismatched ID %#', async (body) => {
+    fetchMock.mockResolvedValue(Response.json(body));
+    await expect(service.getDetail(123)).rejects.toMatchObject({
+      status: 502,
+      response: { code: 'GENIUS_UPSTREAM_ERROR' },
+    });
+  });
+
+  it('aborts a detail response body on timeout', async () => {
+    jest.useFakeTimers();
+    fetchMock.mockImplementation((_url, options) =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              options?.signal?.addEventListener('abort', () =>
+                controller.error(new DOMException('Aborted', 'AbortError')),
+              );
+            },
+          }),
+        ),
+      ),
+    );
+    const failure = expect(service.getDetail(123)).rejects.toMatchObject({
+      status: 504,
+      response: { code: 'GENIUS_TIMEOUT' },
+    });
+    await jest.advanceTimersByTimeAsync(50);
+    await failure;
+  });
+
   it('aborts a pending request on timeout', async () => {
     jest.useFakeTimers();
     let signal: AbortSignal | null | undefined;
