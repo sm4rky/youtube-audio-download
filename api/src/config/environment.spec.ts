@@ -8,6 +8,10 @@ describe('environment configuration', () => {
       HOST: '127.0.0.1',
       CORS_ORIGINS: ['http://localhost:5173'],
       GENIUS_TIMEOUT_MS: 8000,
+      LRCLIB_TIMEOUT_MS: 8000,
+      LRCLIB_CLIENT_NAME: 'AudioMint',
+      LRCLIB_CLIENT_VERSION: '0.1.0',
+      LRCLIB_CLIENT_CONTACT: '',
     });
   });
 
@@ -23,6 +27,10 @@ describe('environment configuration', () => {
       HOST: '0.0.0.0',
       CORS_ORIGINS: ['http://localhost:5173', 'chrome-extension://example'],
       GENIUS_TIMEOUT_MS: 8000,
+      LRCLIB_TIMEOUT_MS: 8000,
+      LRCLIB_CLIENT_NAME: 'AudioMint',
+      LRCLIB_CLIENT_VERSION: '0.1.0',
+      LRCLIB_CLIENT_CONTACT: '',
     });
   });
 
@@ -45,6 +53,40 @@ describe('environment configuration', () => {
     expect(
       validateEnvironment({ GENIUS_TIMEOUT_MS: '12000' }).GENIUS_TIMEOUT_MS,
     ).toBe(12000);
+  });
+
+  it.each(['', ' ', 'abc', '0', '-1', '30001', '1.5', Infinity, true, [1]])(
+    'rejects invalid LRCLIB timeout %#',
+    (LRCLIB_TIMEOUT_MS) => {
+      expect(() => validateEnvironment({ LRCLIB_TIMEOUT_MS })).toThrow(
+        'LRCLIB_TIMEOUT_MS',
+      );
+    },
+  );
+
+  it('validates and normalizes LRCLIB configuration', () => {
+    expect(
+      validateEnvironment({
+        LRCLIB_TIMEOUT_MS: '12000',
+        LRCLIB_CLIENT_NAME: 'AudioMint',
+        LRCLIB_CLIENT_VERSION: '0.2.0',
+        LRCLIB_CLIENT_CONTACT: 'contact@example.com',
+      }),
+    ).toMatchObject({
+      LRCLIB_TIMEOUT_MS: 12000,
+      LRCLIB_CLIENT_CONTACT: 'contact@example.com',
+    });
+  });
+
+  it.each([
+    { LRCLIB_CLIENT_NAME: '' },
+    { LRCLIB_CLIENT_NAME: 'app\r\nHeader' },
+    { LRCLIB_CLIENT_VERSION: '' },
+    { LRCLIB_CLIENT_CONTACT: 'not a contact' },
+    { LRCLIB_CLIENT_CONTACT: 'https://user:secret@example.com' },
+    { LRCLIB_CLIENT_CONTACT: 'contact@example.com\r\nHeader: value' },
+  ])('rejects invalid client identification %#', (input) => {
+    expect(() => validateEnvironment(input)).toThrow('LRCLIB_CLIENT_');
   });
 
   it.each(['', ' ', 'abc', '1.5', '0', '-1', '30001', Infinity])(

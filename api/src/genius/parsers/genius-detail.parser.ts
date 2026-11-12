@@ -4,15 +4,17 @@ import type {
 } from '../types/genius-song-detail';
 import type { GeniusAlbum } from '../types/genius-entities';
 import {
-  isRecord,
-  isPositiveSafeInteger,
-  isNonemptyString,
   parseGeniusEnvelope,
   parseArtists,
   parseReleaseYear,
   parseIsoReleaseYear,
   parseOptionalUrl,
 } from './genius-validation';
+import {
+  isRecord,
+  isPositiveSafeInteger,
+  isNonemptyString,
+} from '../../upstream-validation';
 
 function parseAlbum(value: unknown): GeniusAlbum | null {
   if (

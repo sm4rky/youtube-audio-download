@@ -1,6 +1,6 @@
 ﻿# YouTube Audio API
 
-NestJS 11 + Fastify metadata backend for the AudioMint Chrome extension. The backend calls the official Genius API and keeps its access token server-side. Audio extraction, MP3 conversion and tag writing belong to the extension. No database, audio jobs, queue or local helper is required.
+NestJS 11 + Fastify backend for the AudioMint Chrome extension. Genius provides song metadata and LRCLIB provides plain and synchronized lyrics through independent endpoints. The Genius access token stays server-side. Audio extraction, MP3 conversion and tag writing belong to the extension.
 
 ## Setup
 
@@ -27,6 +27,11 @@ The supported settings in `.env.example` are:
 - `CORS_ORIGINS=http://localhost:5173`: comma-separated explicit origins, trimmed with empty entries removed. Wildcards and credentials are not enabled.
 - `GENIUS_ACCESS_TOKEN=`: server-side access token, required for search/detail but not startup or health.
 - `GENIUS_TIMEOUT_MS=8000`: integer from 1 to 30000; aborts the upstream request, including response-body consumption.
+- `LRCLIB_TIMEOUT_MS=8000`, an integer from 1 to 30000, covers response headers and body consumption with request cancellation.
+- `LRCLIB_CLIENT_NAME=AudioMint` and `LRCLIB_CLIENT_VERSION=0.1.0` identify the application.
+- `LRCLIB_CLIENT_CONTACT=` accepts an HTTPS project/homepage URL or an email address. Supply the project's actual contact information to complete LRCLIB's requested client identification.
+
+The User-Agent is `AudioMint v0.1.0 (contact)` when contact is configured. The default identifies the name/version while contact awaits a project-provided value. The fixed provider URL is `https://lrclib.net/api/search`. Anonymous reads work with client identification. The provider's client registration and rate-limit details are documented at [LRCLIB API reference](https://lrclib.net/docs.txt).
 
 HTML/lyrics configuration is no longer supported. Existing private `.env` files are left unchanged; old page/lyrics limit variables have no effect.
 
@@ -56,7 +61,7 @@ It makes no external requests and works without a Genius token.
 
 `SongSearchResponse` contains `query` and `items`. Each item contains:
 
-- `geniusId`, `title`, `artistName`: the last field is the singular primary artist name.
+- `geniusId`, `title`, and `artistName` (the singular primary artist name).
 - `primaryArtists`, `featuredArtists`: arrays of `{ geniusId, name }`.
 - `year`: integer or null, from validated release date components.
 - `coverUrl`, `geniusUrl`: URL strings or null.
@@ -78,7 +83,41 @@ The backend makes exactly one request to `https://api.genius.com/songs/:id`. It 
 - `geniusUrl`: the song page URL, or null. The extension can use this to open the song page in a future user-driven flow; no embed script is returned or executed.
 - `media`: YouTube-only entries `{ provider: "youtube", type: string | null, url: string, start: number | null }`. URLs must use HTTPS on explicitly allowed YouTube/youtu.be hosts without credentials or non-default ports. Exact duplicates are removed in source order. Missing/invalid media yields `[]`; missing/invalid type or start yields null. These are Genius-linked videos, not a guarantee of the same audio version as the user's source.
 
-The backend does not fetch HTML, extract lyrics, parse embedded page state, or enrich track/disc numbers. The former track/disc fields and lyrics endpoint have been removed, rather than returning placeholder nulls or errors for an unsupported feature. Lyrics and page-derived metadata are planned for the extension and are not implemented there by this backend task.
+Genius detail uses API metadata and returns `geniusUrl` for a future extension-driven page flow. Track/disc extraction belongs to a separate future task. The independent LRCLIB endpoint below supplies lyrics for the selected Genius song.
+
+### LRCLIB lyrics search
+
+`GET /api/v1/lyrics/search?title=Blinding%20Lights&artist=The%20Weeknd`
+
+Required `title` and `artist`, and optional `album`, are trimmed strings of 1–200 characters. Optional `duration` is a finite positive decimal number in seconds, including fractional values. Empty supplied hints, arrays, objects, overflow/NaN/Infinity, negative/zero duration and additional query parameters return HTTP 400. Unicode is preserved.
+
+```json
+{
+  "query": { "title": "Original Song", "artist": "Original Artist", "album": null, "duration": null },
+  "lyrics": {
+    "lrclibId": 123,
+    "trackName": "Original Song",
+    "artistName": "Original Artist",
+    "albumName": "Original Album",
+    "duration": 210,
+    "instrumental": false,
+    "plainLyrics": "[Verse]\nOriginal plain line\n",
+    "syncedLyrics": "[00:12.50] Independent synchronized line\n"
+  }
+}
+```
+
+The example uses original fixture text. The endpoint returns exactly one selected record. A valid search without a suitable candidate returns HTTP 200 with the normalized `query` and `lyrics: null`. A matching record can independently have either, both or neither lyric field populated. Instrumental flags and lyric strings are preserved exactly. Optional upstream album/duration information maps to null when unavailable. The mapper returns both lyric fields from the same record.
+
+Matching uses a stable sequence of comparisons with no weighted scoring. Candidate title and artist must equal the query after NFC normalization, lowercasing and whitespace normalization. Accents, punctuation and version words remain significant. Among eligible candidates, exact normalized album wins first, then closer known duration when supplied, then having both nonempty lyric strings. Remaining ties retain upstream order. A recording can match even with a large YouTube duration difference. Strict identity comparison can return null for punctuation differences, extra featured-artist credits or spelling variations.
+
+Album and duration are soft local matching hints. The one upstream search sends `track_name` and `artist_name`, allowing records with incomplete/different album metadata to remain eligible. Duration is used for local ranking. v1 search already contains the two lyric strings. There is one provider request per lyrics search.
+
+Runtime parsing checks the response array, positive safe IDs, required title/artist, boolean instrumental, optional finite positive duration, and string-or-null lyric fields. Malformed records are skipped and duplicate IDs retain their first valid occurrence. A malformed top-level response is an upstream error. Lyrics content, headings, annotations, whitespace and original LRC text are preserved for frontend editing.
+
+LRCLIB errors use the existing `{ statusCode, code, message }` convention. HTTP 429 maps to HTTP 503 `LRCLIB_RATE_LIMITED`, timeout maps to HTTP 504 `LRCLIB_TIMEOUT`, and network/unexpected HTTP/invalid JSON or envelope errors map to HTTP 502 `LRCLIB_UPSTREAM_ERROR`. Valid Retry-After from upstream 429/503 is exposed as optional `retryAfterSeconds`, including conversion from an HTTP date. Clients should wait at least this interval before retrying. Each call makes a single attempt. Content-Type is checked before JSON parsing, and logs contain safe error codes/statuses.
+
+LyricsSearch uses LRCLIB independently of Genius and operates without a configured Genius token. Genius detail continues to use its own API flow. Plain and synchronized lyrics remain independent source strings for future frontend editing and export.
 
 ## Errors
 
@@ -101,6 +140,8 @@ Start the API, select GET and No Auth in Postman, and use an ID from search:
 curl "http://127.0.0.1:3001/api/v1/health"
 curl "http://127.0.0.1:3001/api/v1/songs/search?q=WATCH%20ME"
 curl "http://127.0.0.1:3001/api/v1/songs/14141792"
+curl --get "http://127.0.0.1:3001/api/v1/lyrics/search" --data-urlencode "title=Blinding Lights" --data-urlencode "artist=The Weeknd"
+curl --get "http://127.0.0.1:3001/api/v1/lyrics/search" --data-urlencode "title=Blinding Lights" --data-urlencode "artist=The Weeknd" --data-urlencode "album=After Hours" --data-urlencode "duration=200"
 ```
 
 Do not send your Genius token in these client requests. The example ID was verified against Genius during development; availability and metadata can change upstream.
@@ -119,11 +160,18 @@ Build before running `start:prod`. The existing `npm run lint` includes `--fix`;
 
 Automated tests never call Genius or need a real token. GeniusService tests mock fetch at the HTTP boundary, including timeout while reading the body. Pure parsers validate endpoint-specific responses. E2e tests use Fastify and configure-app.ts, verify route validation and response mapping, and assert that detail makes no additional HTTP requests beyond the mocked API service.
 
+LRCLIB provider tests mock fetch, including body-read timeout, rate limits, Retry-After and schema failures. Lyrics matcher tests document identity, album, duration, availability and source-order priorities. Lyrics e2e tests use Fastify, common bootstrap configuration and mocked upstream HTTP. They also verify that lyric retrieval avoids Genius requests and that Genius detail avoids LRCLIB calls.
+
+A separate live smoke test through a temporary local backend returned HTTP 200 for title `Blinding Lights`, artist `The Weeknd`, album `After Hours`, selecting LRCLIB record `5512759` with duration 203 seconds. Both lyric fields were present. Only metadata and string lengths were logged. The request used the application name/version header while project contact remained unconfigured. This single observation verifies that flow for the tested query at that time.
+
 ## Code organization
 
 - `genius/types/`: independent validated search/detail types and small artist/album entities.
 - `genius/parsers/`: separate pure search/detail parsers and small shared field/envelope validators. Raw network JSON remains unknown until validated.
 - `genius/genius.service.ts`: official API requests, server authentication, timeout, error handling and parser selection.
+- `lrclib/types/`, `lrclib/parsers/`, `lrclib.service.ts`, `lrclib.module.ts` follow the provider structure for validated LRCLIB data and HTTP requests.
+- `lyrics/dto/`, `lyrics/types/`, `lyrics/matchers/`, `lyrics/mappers/` own query validation, public contracts, pure selection and mapping. LyricsService orchestrates the LRCLIB search and LyricsController exposes the route.
+- `upstream-validation.ts` contains the three shared object/string/ID guards used at provider boundaries.
 - `songs/types/`: independent extension-facing search/detail contracts.
 - `songs/mappers/`: pure conversion from validated Genius data to project contracts.
 - `songs/songs.service.ts`: orchestration only; no page downloading or enrichment.
@@ -132,4 +180,4 @@ Automated tests never call Genius or need a real token. GeniusService tests mock
 
 ## Remaining boundaries
 
-Redis, cache, request coalescing and rate limiting are not implemented. The shared-token backend is not ready for unrestricted public traffic. The next step is an extension flow that opens the Genius page and verifies user-driven page reading; no browser-side lyrics capability is claimed by this backend cleanup.
+Redis, cache, request coalescing and internal rate limiting remain future tasks. LRCLIB's external quotas apply to each request and require clients to honor returned retry timing. Frontend lyric editing, playback synchronization, timestamp/LRC editing and MP3 USLT/SYLT export are future extension tasks. This endpoint supplies the independent source strings needed by those flows.

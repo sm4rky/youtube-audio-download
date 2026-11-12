@@ -205,8 +205,8 @@ describe('Songs search (Fastify e2e)', () => {
     ).toMatchObject({
       year: null,
       primaryArtists: [],
-      featuredArtists: [],
       artistName: 'Adele',
+      featuredArtists: [],
     });
   });
 });

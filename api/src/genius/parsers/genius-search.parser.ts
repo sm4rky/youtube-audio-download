@@ -1,13 +1,15 @@
 import type { GeniusSearchSong } from '../types/genius-search-song';
 import {
-  isRecord,
-  isPositiveSafeInteger,
-  isNonemptyString,
   parseGeniusEnvelope,
   parseArtists,
   parseReleaseYear,
   parseOptionalUrl,
 } from './genius-validation';
+import {
+  isRecord,
+  isPositiveSafeInteger,
+  isNonemptyString,
+} from '../../upstream-validation';
 
 function parseSearchSong(value: unknown): GeniusSearchSong | null {
   if (

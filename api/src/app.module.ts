@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { validateEnvironment } from './config/environment';
 import { HealthModule } from './health/health.module';
 import { SongsModule } from './songs/songs.module';
+import { LyricsModule } from './lyrics/lyrics.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { SongsModule } from './songs/songs.module';
     }),
     HealthModule,
     SongsModule,
+    LyricsModule,
   ],
 })
 export class AppModule {}
