@@ -4,6 +4,21 @@ import type { GeniusSearchSong } from './types/genius-search-song';
 import type { GeniusSongDetail } from './types/genius-song-detail';
 import { parseGeniusSearchResponse } from './parsers/genius-search.parser';
 import { parseGeniusDetailResponse } from './parsers/genius-detail.parser';
+import { parseGeniusArtistSongsResponse } from './parsers/genius-artist-songs.parser';
+import { parseGeniusAlbumTracksResponse } from './parsers/genius-album-tracks.parser';
+import type {
+  GeniusArtistSongs,
+  GeniusArtistSongsSort,
+} from './types/genius-artist-songs';
+import type { GeniusAlbumTracks } from './types/genius-album-tracks';
+
+type RequestContext = 'search' | 'song' | 'artist' | 'album';
+const subjects: Record<RequestContext, string> = {
+  search: 'Song search',
+  song: 'Song metadata',
+  artist: 'Artist songs',
+  album: 'Album tracks',
+};
 
 @Injectable()
 export class GeniusService {
@@ -22,15 +37,52 @@ export class GeniusService {
   async getDetail(id: number): Promise<GeniusSongDetail> {
     const response = await this.request(
       new URL(`https://api.genius.com/songs/${id}`),
-      true,
+      'song',
     );
     const song = parseGeniusDetailResponse(response, id);
-    if (song === null) throw this.upstreamError(true);
+    if (song === null) throw this.upstreamError('song');
     return song;
   }
 
-  private async request(url: URL, detail = false): Promise<unknown> {
-    const subject = detail ? 'Song metadata' : 'Song search';
+  async getArtistSongs(
+    id: number,
+    page: number,
+    perPage: number,
+    sort: GeniusArtistSongsSort,
+  ): Promise<GeniusArtistSongs> {
+    const url = new URL(`https://api.genius.com/artists/${id}/songs`);
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('per_page', String(perPage));
+    url.searchParams.set('sort', sort);
+    const result = parseGeniusArtistSongsResponse(
+      await this.request(url, 'artist'),
+      page,
+    );
+    if (result === null) throw this.upstreamError('artist');
+    return result;
+  }
+
+  async getAlbumTracks(
+    id: number,
+    page: number,
+    perPage: number,
+  ): Promise<GeniusAlbumTracks> {
+    const url = new URL(`https://api.genius.com/albums/${id}/tracks`);
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('per_page', String(perPage));
+    const result = parseGeniusAlbumTracksResponse(
+      await this.request(url, 'album'),
+      page,
+    );
+    if (result === null) throw this.upstreamError('album');
+    return result;
+  }
+
+  private async request(
+    url: URL,
+    context: RequestContext = 'search',
+  ): Promise<unknown> {
+    const subject = subjects[context];
     const token = this.config.get<string>('GENIUS_ACCESS_TOKEN')?.trim();
     if (!token) {
       throw this.failure(
@@ -54,11 +106,11 @@ export class GeniusService {
         signal: controller.signal,
         redirect: 'error',
       });
-      if (detail && response.status === 404) {
+      if (context !== 'search' && response.status === 404) {
         throw this.failure(
           HttpStatus.NOT_FOUND,
-          'SONG_NOT_FOUND',
-          'Song was not found.',
+          `${context.toUpperCase()}_NOT_FOUND`,
+          `${context[0].toUpperCase() + context.slice(1)} was not found.`,
         );
       }
       if (response.status === 401 || response.status === 403) {
@@ -75,7 +127,7 @@ export class GeniusService {
           `${subject} is temporarily rate limited. Please try again later.`,
         );
       }
-      if (response.status !== 200) throw this.upstreamError(detail);
+      if (response.status !== 200) throw this.upstreamError(context);
 
       // Keep the abort timer active until the entire body has been read.
       const body: unknown = await response.json();
@@ -89,18 +141,18 @@ export class GeniusService {
           `${subject} timed out. Please try again.`,
         );
       }
-      throw this.upstreamError(detail);
+      throw this.upstreamError(context);
     } finally {
       clearTimeout(timer);
       controller.abort();
     }
   }
 
-  private upstreamError(detail = false): HttpException {
+  private upstreamError(context: RequestContext = 'search'): HttpException {
     return this.failure(
       HttpStatus.BAD_GATEWAY,
       'GENIUS_UPSTREAM_ERROR',
-      `${detail ? 'Song metadata' : 'Song search'} is temporarily unavailable.`,
+      `${subjects[context]} is temporarily unavailable.`,
     );
   }
 

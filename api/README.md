@@ -25,7 +25,7 @@ The supported settings in `.env.example` are:
 - `HOST=127.0.0.1`
 - `PORT=3001`: integer from 1 to 65535.
 - `CORS_ORIGINS=http://localhost:5173`: comma-separated explicit origins, trimmed with empty entries removed. Wildcards and credentials are not enabled.
-- `GENIUS_ACCESS_TOKEN=`: server-side access token, required for search/detail but not startup or health.
+- `GENIUS_ACCESS_TOKEN=` supplies the server-side access token for Genius metadata and discovery requests. Startup and health work without it.
 - `GENIUS_TIMEOUT_MS=8000`: integer from 1 to 30000; aborts the upstream request, including response-body consumption.
 - `LRCLIB_TIMEOUT_MS=8000`, an integer from 1 to 30000, covers response headers and body consumption with request cancellation.
 - `LRCLIB_CLIENT_NAME=AudioMint` and `LRCLIB_CLIENT_VERSION=0.1.0` identify the application.
@@ -42,6 +42,78 @@ Add the extension's explicit `chrome-extension://<extension-id>` origin when nee
 ## Endpoints
 
 All endpoints use GET and require no client Authorization header or request body. The default base URL is `http://127.0.0.1:3001/api/v1`.
+
+### Artist songs and album tracks
+
+```http
+GET /api/v1/artists/2358/songs?page=1&perPage=5&sort=popularity
+GET /api/v1/artists/2358/songs?page=2&perPage=5&sort=popularity
+GET /api/v1/albums/1776887/tracks?page=1&perPage=2
+GET /api/v1/albums/1776887/tracks?page=2&perPage=2
+```
+
+The Weeknd's verified Genius artist ID is `2358`. The sample ID `1230` returned upstream HTTP 404. Album `1776887` is FIRESTARTER.
+
+Both routes accept positive safe integer path IDs. `page` defaults to 1 and must be a positive safe integer. `perPage` defaults to 20 and must be an integer from 1 through 50. Decimal digit strings are accepted. Fractional, negative, empty, repeated, object-shaped and unsafe integer values return HTTP 400. Unknown query parameters return HTTP 400. Artist songs additionally accepts `sort=popularity` (default) or `sort=title`. Album tracks preserves upstream album order.
+
+Artist songs returns this example structure. Song values below are illustrative.
+
+```json
+{
+  "artistId": 2358,
+  "sort": "popularity",
+  "pagination": { "page": 1, "perPage": 5, "nextPage": 2, "hasMore": true },
+  "items": [{
+    "geniusId": 123456,
+    "title": "Example Song",
+    "artistName": "The Weeknd",
+    "primaryArtists": [{ "geniusId": 2358, "name": "The Weeknd" }],
+    "featuredArtists": [],
+    "year": null,
+    "coverUrl": null,
+    "geniusUrl": null
+  }]
+}
+```
+
+Album tracks returns `albumId`, the same `pagination` object, and `items` containing `{ trackNumber, discNumber, song }`. Each `song` has exactly the summary fields shown above.
+
+```json
+{
+  "albumId": 1776887,
+  "pagination": { "page": 1, "perPage": 2, "nextPage": 2, "hasMore": true },
+  "items": [{
+    "trackNumber": 2,
+    "discNumber": 1,
+    "song": {
+      "geniusId": 14141792,
+      "title": "WATCH ME",
+      "artistName": "K/DA",
+      "primaryArtists": [{ "geniusId": 1626547, "name": "K/DA" }],
+      "featuredArtists": [],
+      "year": 2026,
+      "coverUrl": null,
+      "geniusUrl": null
+    }
+  }]
+}
+```
+
+This abbreviated example illustrates the contract. Actual artist arrays and artwork come from the provider.
+
+`trackNumber` maps to Genius `disc_track_number`, the position within its disc. `discNumber` maps to `disc_number`. Missing or invalid numbers become `null`. The upstream global `number` field is unused. A live multi-disc check on album `657430` confirmed global number 10 corresponds to disc 2, track 1. Repeated song IDs at distinct album positions remain in the response. Artist-song duplicate IDs keep the first valid occurrence. Invalid song records are skipped. Missing optional year/artwork/URL values become `null`, and missing artist arrays follow the existing search parser fallback rules.
+
+Each request fetches one page from the authenticated Developer API at `https://api.genius.com/artists/{id}/songs` or `https://api.genius.com/albums/{id}/tracks`. Public `perPage` maps to upstream `per_page`. `nextPage` comes directly from validated `next_page`, and `hasMore` equals `nextPage !== null`. Missing, non-integer or non-forward pagination metadata is an upstream schema error. A shorter page can still have a next page. There are no total counts. Valid empty pages return HTTP 200 with `items: []`, `nextPage: null`, and `hasMore: false`.
+
+Artist songs includes songs associated with that artist by Genius, including featured appearances. Coverage depends on Genius's catalog. These lists use their own parsers and reuse the validated song-summary parser and public summary mapper. They make no per-song detail, media or lyrics requests. Song detail continues to make its own single metadata request.
+
+Invalid client input returns HTTP 400. Upstream 404 maps to HTTP 404 with `ARTIST_NOT_FOUND` or `ALBUM_NOT_FOUND`. Missing configuration and authentication errors use HTTP 503 with `GENIUS_NOT_CONFIGURED` and `GENIUS_AUTH_FAILED`. Rate limiting uses HTTP 503 `GENIUS_RATE_LIMITED`. Timeout uses HTTP 504 `GENIUS_TIMEOUT`. Network failures, other statuses, malformed JSON and invalid schemas use HTTP 502 `GENIUS_UPSTREAM_ERROR`. Errors retain `{ statusCode, code, message }`. The existing deadline covers headers and body consumption and aborts the request. Requests have no automatic retry.
+
+Upstream verification used Node.js native fetch with the private server token. Artist popularity/title sorting, the 50-item limit (51 returned 422), different pages, empty pages and nonexistent IDs were checked. Developer album tracks returned JSON, nested songs and `next_page` for FIRESTARTER across pages 1 and 2. The website-host comparison returned HTTP 403 HTML with challenge markers on both pages. Production discovery uses the Developer API host exclusively. The official documentation site was inaccessible during verification. The maintained client references distinguish the two API hosts and describe artist sorting/pagination. [Artist API reference](https://lyricsgenius.readthedocs.io/en/master/reference/api.html#lyricsgenius.API.artist_songs), [website API reference](https://lyricsgenius.readthedocs.io/en/stable/reference/public_api.html#lyricsgenius.PublicAPI.album_tracks).
+
+The album route on the Developer API was verified live. Its long-term documentation/support status could not be confirmed from the inaccessible official documentation. Automated tests mock all external HTTP requests. Local live smoke tests are performed separately.
+
+The new domain modules live in `src/artists` and `src/albums`, with controllers, services, mappers and response types. Artist sorting extends the shared pagination DTO. Shared ID validation is in `genius-id-params.dto.ts`, shared pagination DTO/type in `pagination-query.dto.ts` and `pagination.ts`, provider list parsers/types in `src/genius`, and public song summaries in `src/songs`. Search response items use SongSummary directly. GeniusSearchSong remains an alias for the shared provider summary type.
 
 ### Health
 
