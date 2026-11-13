@@ -7,7 +7,10 @@
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
-    "types": ["vite/client"],
+    "types": ["vite/client", "chrome-types"],
+    "strict": true,
+    "allowJs": true,
+    "checkJs": true,
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
@@ -25,5 +28,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src", "public/content.js"]
 }
