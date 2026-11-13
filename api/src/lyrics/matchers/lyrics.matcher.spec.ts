@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import type { LrclibRecord } from '../../lrclib/types/lrclib-record';
+import type { LrclibRecord } from '@/lrclib/types/lrclib-record';
 import type { LyricsSearchCriteria } from '../types/lyrics-search-response';
 import { selectBestLyricsMatch } from './lyrics.matcher';
 

@@ -134,9 +134,56 @@ describe('GeniusService HTTP boundary', () => {
   });
 
   it('rejects invalid JSON', async () => {
-    fetchMock.mockResolvedValue(new Response('not JSON'));
+    fetchMock.mockResolvedValue(
+      new Response('not JSON', {
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
     await expectFailure('GENIUS_UPSTREAM_ERROR', 502);
   });
+
+  describe.each(['search', 'detail'] as const)(
+    '%s response content type',
+    (operation) => {
+      const body = {
+        meta: { status: 200 },
+        response: { hits: [songHit], song: songHit.result },
+      };
+      const request = () =>
+        operation === 'search'
+          ? service.search('Hello')
+          : service.getDetail(123);
+
+      it.each([null, 'text/html', 'text/plain'])(
+        'rejects %s before reading the JSON body',
+        async (contentType) => {
+          const response = Response.json(body);
+          if (contentType === null) response.headers.delete('content-type');
+          else response.headers.set('content-type', contentType);
+          const readBody = jest.spyOn(response, 'json');
+          fetchMock.mockResolvedValue(response);
+          await expect(request()).rejects.toMatchObject({
+            response: { statusCode: 502, code: 'GENIUS_UPSTREAM_ERROR' },
+          });
+          expect(readBody).not.toHaveBeenCalled();
+          expect(fetchMock).toHaveBeenCalledTimes(1);
+          expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+        },
+      );
+
+      it.each([
+        'application/json; charset=utf-8',
+        'Application/JSON',
+        'application/vnd.genius+json',
+      ])('accepts JSON media type %s', async (contentType) => {
+        fetchMock.mockResolvedValue(
+          Response.json(body, { headers: { 'content-type': contentType } }),
+        );
+        await expect(request()).resolves.toBeDefined();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+    },
+  );
 
   it.each([
     null,
@@ -433,6 +480,7 @@ describe('GeniusService HTTP boundary', () => {
               );
             },
           }),
+          { headers: { 'content-type': 'application/json' } },
         ),
       ),
     );
@@ -475,6 +523,7 @@ describe('GeniusService HTTP boundary', () => {
               );
             },
           }),
+          { headers: { 'content-type': 'application/json' } },
         ),
       ),
     );

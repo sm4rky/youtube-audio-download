@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { LrclibModule } from '../lrclib/lrclib.module';
+import { LrclibModule } from '@/lrclib/lrclib.module';
 import { LyricsController } from './lyrics.controller';
 import { LyricsService } from './lyrics.service';
 

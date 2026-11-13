@@ -14,7 +14,7 @@ import {
   isRecord,
   isPositiveSafeInteger,
   isNonemptyString,
-} from '../../upstream-validation';
+} from '@/common/upstream/upstream-validation';
 
 function parseAlbum(value: unknown): GeniusAlbum | null {
   if (

@@ -1,19 +1,19 @@
-import type { GeniusArtistSongs } from '../../genius/types/genius-artist-songs';
-import type { ArtistSongsQueryDto } from '../dto/artist-songs-query.dto';
+import type { GeniusArtistSongs } from '@/genius/types/genius-artist-songs';
+import type { ArtistSongsCriteria } from '../types/artist-songs-criteria';
 import type { ArtistSongsResponse } from '../types/artist-songs-response';
-import { mapSongSummary } from '../../songs/mappers/song-summary.mapper';
+import { mapSongSummary } from '@/songs/mappers/song-summary.mapper';
 
 export function mapArtistSongsResponse(
   id: number,
-  query: ArtistSongsQueryDto,
+  criteria: ArtistSongsCriteria,
   result: GeniusArtistSongs,
 ): ArtistSongsResponse {
   return {
     artistId: id,
-    sort: query.sort,
+    sort: criteria.sort,
     pagination: {
-      page: query.page,
-      perPage: query.perPage,
+      page: criteria.page,
+      perPage: criteria.perPage,
       nextPage: result.next_page,
       hasMore: result.next_page !== null,
     },

@@ -1,7 +1,7 @@
 import type { GeniusArtistSongs } from '../types/genius-artist-songs';
 import { parseGeniusEnvelope } from './genius-validation';
 import { parseGeniusSongSummary } from './genius-song-summary.parser';
-import { isPositiveSafeInteger } from '../../upstream-validation';
+import { isPositiveSafeInteger } from '@/common/upstream/upstream-validation';
 
 export function parseGeniusArtistSongsResponse(
   value: unknown,

@@ -3,7 +3,7 @@ import {
   isRecord,
   isPositiveSafeInteger,
   isNonemptyString,
-} from '../../upstream-validation';
+} from '@/common/upstream/upstream-validation';
 
 export function parseGeniusEnvelope(
   value: unknown,

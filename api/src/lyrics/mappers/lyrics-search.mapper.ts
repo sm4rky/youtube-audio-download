@@ -1,4 +1,4 @@
-import type { LrclibRecord } from '../../lrclib/types/lrclib-record';
+import type { LrclibRecord } from '@/lrclib/types/lrclib-record';
 import type {
   LyricsSearchCriteria,
   LyricsSearchResponse,

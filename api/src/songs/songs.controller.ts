@@ -3,7 +3,7 @@ import { SearchSongsQueryDto } from './dto/search-songs-query.dto';
 import { SongsService } from './songs.service';
 import type { SongSearchResponse } from './types/song-search-response';
 import type { SongDetailResponse } from './types/song-detail-response';
-import { SongIdParamsDto } from './dto/song-id-params.dto';
+import { GeniusIdParamsDto } from '@/common/http/genius-id-params.dto';
 
 @Controller('songs')
 export class SongsController {
@@ -15,7 +15,7 @@ export class SongsController {
   }
 
   @Get(':id')
-  getDetail(@Param() params: SongIdParamsDto): Promise<SongDetailResponse> {
+  getDetail(@Param() params: GeniusIdParamsDto): Promise<SongDetailResponse> {
     return this.songs.getDetail(params.id);
   }
 }

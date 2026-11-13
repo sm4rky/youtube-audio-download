@@ -4,7 +4,10 @@ import type {
 } from '../types/genius-album-tracks';
 import { parseGeniusEnvelope } from './genius-validation';
 import { parseGeniusSongSummary } from './genius-song-summary.parser';
-import { isRecord, isPositiveSafeInteger } from '../../upstream-validation';
+import {
+  isRecord,
+  isPositiveSafeInteger,
+} from '@/common/upstream/upstream-validation';
 
 export function parseGeniusAlbumTracksResponse(
   value: unknown,

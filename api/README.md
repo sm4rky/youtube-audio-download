@@ -113,7 +113,7 @@ Upstream verification used Node.js native fetch with the private server token. A
 
 The album route on the Developer API was verified live. Its long-term documentation/support status could not be confirmed from the inaccessible official documentation. Automated tests mock all external HTTP requests. Local live smoke tests are performed separately.
 
-The new domain modules live in `src/artists` and `src/albums`, with controllers, services, mappers and response types. Artist sorting extends the shared pagination DTO. Shared ID validation is in `genius-id-params.dto.ts`, shared pagination DTO/type in `pagination-query.dto.ts` and `pagination.ts`, provider list parsers/types in `src/genius`, and public song summaries in `src/songs`. Search response items use SongSummary directly. GeniusSearchSong remains an alias for the shared provider summary type.
+The new domain modules live in `src/artists` and `src/albums`, with controllers, services, mappers and response types. Artist sorting extends the shared pagination DTO. Shared ID and pagination DTOs live in `src/common/http`, pagination contracts in `src/common/pagination`, provider list parsers/types in `src/genius`, and public song summaries in `src/songs`. Search uses `GeniusSongSummary` and `SongSummary` directly. Controllers convert validated DTOs into `ArtistSongsCriteria` or `PaginationCriteria`; application services and mappers consume those plain types. Discovery methods are named `listSongs()` and `listTracks()`.
 
 ### Health
 
@@ -138,7 +138,7 @@ It makes no external requests and works without a Genius token.
 - `year`: integer or null, from validated release date components.
 - `coverUrl`, `geniusUrl`: URL strings or null.
 
-Only valid song hits are kept, preserving upstream order and the first occurrence of each song ID. Invalid required item fields are skipped; malformed envelopes fail the request. Missing artist lists become empty arrays, with fallback to the singular primary artist when a valid ID is available. Artwork priority is song image, song thumbnail, header image, then null. Empty results return HTTP 200 with `items: []`. No extra detail requests are made per search result.
+The Search parser keeps valid song hits and removes duplicate IDs, preserving upstream order and the first valid occurrence of each song ID. Artist Songs follows the same parser rule. Album Tracks preserves repeated song positions. Search mapping converts the validated list directly. Invalid required item fields are skipped; malformed envelopes fail the request. Missing artist lists become empty arrays, with fallback to the singular primary artist when a valid ID is available. Artwork priority is song image, song thumbnail, header image, then null. Empty results return HTTP 200 with `items: []`. No extra detail requests are made per search result.
 
 ### Detail
 
@@ -200,9 +200,9 @@ Input validation uses the global ValidationPipe and returns HTTP 400. Genius fai
 - HTTP 503 `GENIUS_AUTH_FAILED`: upstream 401/403.
 - HTTP 503 `GENIUS_RATE_LIMITED`: upstream 429.
 - HTTP 504 `GENIUS_TIMEOUT`.
-- HTTP 502 `GENIUS_UPSTREAM_ERROR`: network failure, unexpected HTTP status, invalid JSON/envelope, invalid required detail data, or mismatched detail ID.
+- HTTP 502 `GENIUS_UPSTREAM_ERROR`: network failure, unexpected HTTP status, invalid response content type, invalid JSON/envelope, invalid required detail data, or mismatched detail ID.
 
-No automatic retries are performed. Redirects are rejected instead of forwarding the token to another host. Logs contain only safe error codes/statuses, never tokens, raw upstream bodies or authentication headers. Upstream errors are not converted into empty search results.
+Genius and LRCLIB validate HTTP status, then require `application/json` or a `+json` response media type, read JSON as `unknown`, and validate provider schemas with their parsers. Missing content types and HTML responses fail with the existing upstream error codes. No automatic retries are performed. Redirects are rejected instead of forwarding the token to another host. Logs contain only safe error codes/statuses, never tokens, raw upstream bodies or authentication headers. Upstream errors are not converted into empty search results.
 
 ## Try in Postman or curl
 
@@ -222,13 +222,13 @@ Do not send your Genius token in these client requests. The example ID was verif
 
 ```sh
 npm run build
-npm run start:prod
+npm run typecheck
+npm run lint
 npm test -- --runInBand
 npm run test:e2e -- --runInBand
-npx eslint "{src,apps,libs,test}/**/*.ts"
 ```
 
-Build before running `start:prod`. The existing `npm run lint` includes `--fix`; the direct ESLint command above is read-only. `npm run format` also writes files.
+TypeScript uses full `strict` mode and `noFallthroughCasesInSwitch`. `npm run typecheck` covers source and tests without emitting files. `npm run lint` checks files, while `npm run lint:fix` and `npm run format` write files. Production startup uses `npm run start:prod` after building. The backend and e2e tests use Fastify directly through `FastifyAdapter` and `inject()`. Express and Supertest dependencies have been removed.
 
 Automated tests never call Genius or need a real token. GeniusService tests mock fetch at the HTTP boundary, including timeout while reading the body. Pure parsers validate endpoint-specific responses. E2e tests use Fastify and configure-app.ts, verify route validation and response mapping, and assert that detail makes no additional HTTP requests beyond the mocked API service.
 
@@ -236,19 +236,31 @@ LRCLIB provider tests mock fetch, including body-read timeout, rate limits, Retr
 
 A separate live smoke test through a temporary local backend returned HTTP 200 for title `Blinding Lights`, artist `The Weeknd`, album `After Hours`, selecting LRCLIB record `5512759` with duration 203 seconds. Both lyric fields were present. Only metadata and string lengths were logged. The request used the application name/version header while project contact remained unconfigured. This single observation verifies that flow for the tested query at that time.
 
+## Imports
+
+The backend maps `@/*` to `./src/*` in `tsconfig.json`. Use `@/` for imports across domain modules and shared code, and relative paths within the same module. E2e tests import backend source through `@/`. Both Jest configurations map this prefix to the source directory.
+
+The installed Nest CLI rewrites these aliases to relative imports for `nest build` and `nest start --watch`, including declarations. Production startup uses the emitted JavaScript through `npm run start:prod`. Run backend scripts from `api/`. The `typecheck` script uses TypeScript without emitting files.
+
 ## Code organization
 
-- `genius/types/`: independent validated search/detail types and small artist/album entities.
-- `genius/parsers/`: separate pure search/detail parsers and small shared field/envelope validators. Raw network JSON remains unknown until validated.
+- `genius/types/` contains validated song summaries, independent detail and list contracts, and small artist/album entities.
+- `genius/parsers/` contains separate pure endpoint parsers, a shared song-summary parser and field/envelope validators. Raw network JSON remains unknown until validated.
 - `genius/genius.service.ts`: official API requests, server authentication, timeout, error handling and parser selection.
 - `lrclib/types/`, `lrclib/parsers/`, `lrclib.service.ts`, `lrclib.module.ts` follow the provider structure for validated LRCLIB data and HTTP requests.
 - `lyrics/dto/`, `lyrics/types/`, `lyrics/matchers/`, `lyrics/mappers/` own query validation, public contracts, pure selection and mapping. LyricsService orchestrates the LRCLIB search and LyricsController exposes the route.
-- `upstream-validation.ts` contains the three shared object/string/ID guards used at provider boundaries.
+- `common/http/` contains the shared Genius ID and pagination transport DTOs.
+- `common/pagination/pagination.ts` contains the plain `PaginationCriteria` and public `Pagination` contracts.
+- `common/upstream/upstream-validation.ts` contains the shared object/string/ID guards used at provider boundaries.
+- `artists/types/artist-songs-criteria.ts` defines the application criteria for artist discovery.
+- `albums/types/album-tracks-response.ts` exports public `AlbumTrack` and `AlbumTracksResponse` interfaces.
 - `songs/types/`: independent extension-facing search/detail contracts.
 - `songs/mappers/`: pure conversion from validated Genius data to project contracts.
-- `songs/songs.service.ts`: orchestration only; no page downloading or enrichment.
+- `songs/songs.service.ts`: orchestration of metadata search and detail.
 - `songs/songs.controller.ts`: routes and DTO-based input validation.
 - `health/`, `config/`, `configure-app.ts`, `main.ts`: liveness, environment validation and Fastify bootstrap.
+
+Root `AGENTS.md` records repository structure, architecture boundaries, naming/type conventions, testing commands and Git authorization expectations.
 
 ## Remaining boundaries
 

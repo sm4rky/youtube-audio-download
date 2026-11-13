@@ -13,11 +13,11 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { AppModule } from '../src/app.module';
-import { configureApp } from '../src/configure-app';
-import { validateEnvironment } from '../src/config/environment';
-import { GeniusService } from '../src/genius/genius.service';
-import { LrclibService } from '../src/lrclib/lrclib.service';
+import { AppModule } from '@/app.module';
+import { configureApp } from '@/configure-app';
+import { validateEnvironment } from '@/config/environment';
+import { GeniusService } from '@/genius/genius.service';
+import { LrclibService } from '@/lrclib/lrclib.service';
 
 const record = {
   id: 123,

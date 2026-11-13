@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { LrclibService } from '../lrclib/lrclib.service';
+import { LrclibService } from '@/lrclib/lrclib.service';
 import { selectBestLyricsMatch } from './matchers/lyrics.matcher';
 import { mapLyricsSearchResponse } from './mappers/lyrics-search.mapper';
 import type {

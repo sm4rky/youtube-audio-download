@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { GeniusService } from '../genius/genius.service';
+import { GeniusService } from '@/genius/genius.service';
 import { mapSongSearchResponse } from './mappers/song-search.mapper';
 import { mapSongDetailResponse } from './mappers/song-detail.mapper';
 import type { SongSearchResponse } from './types/song-search-response';

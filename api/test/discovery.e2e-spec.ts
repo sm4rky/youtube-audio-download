@@ -12,9 +12,9 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { AppModule } from '../src/app.module';
-import { configureApp } from '../src/configure-app';
-import { validateEnvironment } from '../src/config/environment';
+import { AppModule } from '@/app.module';
+import { configureApp } from '@/configure-app';
+import { validateEnvironment } from '@/config/environment';
 
 const song = {
   id: 14141792,

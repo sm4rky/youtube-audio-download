@@ -1,18 +1,18 @@
-import type { GeniusAlbumTracks } from '../../genius/types/genius-album-tracks';
-import type { PaginationQueryDto } from '../../pagination-query.dto';
+import type { GeniusAlbumTracks } from '@/genius/types/genius-album-tracks';
+import type { PaginationCriteria } from '@/common/pagination/pagination';
 import type { AlbumTracksResponse } from '../types/album-tracks-response';
-import { mapSongSummary } from '../../songs/mappers/song-summary.mapper';
+import { mapSongSummary } from '@/songs/mappers/song-summary.mapper';
 
 export function mapAlbumTracksResponse(
   id: number,
-  query: PaginationQueryDto,
+  criteria: PaginationCriteria,
   result: GeniusAlbumTracks,
 ): AlbumTracksResponse {
   return {
     albumId: id,
     pagination: {
-      page: query.page,
-      perPage: query.perPage,
+      page: criteria.page,
+      perPage: criteria.perPage,
       nextPage: result.next_page,
       hasMore: result.next_page !== null,
     },

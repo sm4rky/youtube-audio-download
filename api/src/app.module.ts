@@ -1,12 +1,12 @@
-import { ArtistsModule } from './artists/artists.module';
-import { AlbumsModule } from './albums/albums.module';
+import { ArtistsModule } from '@/artists/artists.module';
+import { AlbumsModule } from '@/albums/albums.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { resolve } from 'node:path';
-import { validateEnvironment } from './config/environment';
-import { HealthModule } from './health/health.module';
-import { SongsModule } from './songs/songs.module';
-import { LyricsModule } from './lyrics/lyrics.module';
+import { validateEnvironment } from '@/config/environment';
+import { HealthModule } from '@/health/health.module';
+import { SongsModule } from '@/songs/songs.module';
+import { LyricsModule } from '@/lyrics/lyrics.module';
 
 @Module({
   imports: [

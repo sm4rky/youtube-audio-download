@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { GeniusModule } from '../genius/genius.module';
+import { GeniusModule } from '@/genius/genius.module';
 import { AlbumsController } from './albums.controller';
 import { AlbumsService } from './albums.service';
 

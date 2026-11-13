@@ -105,6 +105,12 @@ describe.each(['artist', 'album'] as const)(
               ? Response.json({})
               : new Response(
                   failure === 'html' ? '<html>Challenge</html>' : '{',
+                  {
+                    headers: {
+                      'content-type':
+                        failure === 'html' ? 'text/html' : 'application/json',
+                    },
+                  },
                 ),
           );
         await expect(request()).rejects.toMatchObject({
@@ -113,6 +119,19 @@ describe.each(['artist', 'album'] as const)(
         expect(fetchMock).toHaveBeenCalledTimes(1);
       },
     );
+
+    it('rejects an HTML content type before reading a JSON-shaped body', async () => {
+      const response = Response.json(envelope, {
+        headers: { 'content-type': 'text/html' },
+      });
+      const readBody = jest.spyOn(response, 'json');
+      fetchMock.mockResolvedValue(response);
+      await expect(request()).rejects.toMatchObject({
+        response: { statusCode: 502, code: 'GENIUS_UPSTREAM_ERROR' },
+      });
+      expect(readBody).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
 
     it('aborts a stalled request at the timeout', async () => {
       jest.useFakeTimers();
@@ -148,6 +167,7 @@ describe.each(['artist', 'album'] as const)(
                 );
               },
             }),
+            { headers: { 'content-type': 'application/json' } },
           ),
         ),
       );

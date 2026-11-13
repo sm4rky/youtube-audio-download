@@ -1,6 +1,6 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { GeniusSearchSong } from './types/genius-search-song';
+import type { GeniusSongSummary } from './types/genius-song-summary';
 import type { GeniusSongDetail } from './types/genius-song-detail';
 import { parseGeniusSearchResponse } from './parsers/genius-search.parser';
 import { parseGeniusDetailResponse } from './parsers/genius-detail.parser';
@@ -26,7 +26,7 @@ export class GeniusService {
 
   constructor(private readonly config: ConfigService) {}
 
-  async search(query: string): Promise<GeniusSearchSong[]> {
+  async search(query: string): Promise<GeniusSongSummary[]> {
     const url = new URL('https://api.genius.com/search');
     url.searchParams.set('q', query);
     const songs = parseGeniusSearchResponse(await this.request(url));
@@ -128,6 +128,14 @@ export class GeniusService {
         );
       }
       if (response.status !== 200) throw this.upstreamError(context);
+
+      const contentType = response.headers
+        .get('content-type')
+        ?.split(';')[0]
+        .trim()
+        .toLowerCase();
+      if (contentType !== 'application/json' && !contentType?.endsWith('+json'))
+        throw this.upstreamError(context);
 
       // Keep the abort timer active until the entire body has been read.
       const body: unknown = await response.json();

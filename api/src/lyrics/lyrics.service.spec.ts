@@ -8,8 +8,8 @@ import {
 } from '@jest/globals';
 import { ConfigService } from '@nestjs/config';
 import { HttpException } from '@nestjs/common';
-import { LrclibService } from '../lrclib/lrclib.service';
-import type { LrclibRecord } from '../lrclib/types/lrclib-record';
+import { LrclibService } from '@/lrclib/lrclib.service';
+import type { LrclibRecord } from '@/lrclib/types/lrclib-record';
 import type { LyricsSearchCriteria } from './types/lyrics-search-response';
 import { LyricsService } from './lyrics.service';
 

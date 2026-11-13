@@ -1,4 +1,4 @@
-import type { GeniusSongDetail } from '../../genius/types/genius-song-detail';
+import type { GeniusSongDetail } from '@/genius/types/genius-song-detail';
 import type { SongDetailResponse } from '../types/song-detail-response';
 
 export function mapSongDetailResponse(

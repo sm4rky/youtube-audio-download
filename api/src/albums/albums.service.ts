@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { GeniusService } from '../genius/genius.service';
-import type { PaginationQueryDto } from '../pagination-query.dto';
+import { GeniusService } from '@/genius/genius.service';
+import type { PaginationCriteria } from '@/common/pagination/pagination';
 import type { AlbumTracksResponse } from './types/album-tracks-response';
 import { mapAlbumTracksResponse } from './mappers/album-tracks.mapper';
 
@@ -8,15 +8,15 @@ import { mapAlbumTracksResponse } from './mappers/album-tracks.mapper';
 export class AlbumsService {
   constructor(private readonly genius: GeniusService) {}
 
-  async tracks(
+  async listTracks(
     id: number,
-    query: PaginationQueryDto,
+    criteria: PaginationCriteria,
   ): Promise<AlbumTracksResponse> {
     const result = await this.genius.getAlbumTracks(
       id,
-      query.page,
-      query.perPage,
+      criteria.page,
+      criteria.perPage,
     );
-    return mapAlbumTracksResponse(id, query, result);
+    return mapAlbumTracksResponse(id, criteria, result);
   }
 }

@@ -12,13 +12,13 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { AppModule } from '../src/app.module';
-import { configureApp } from '../src/configure-app';
-import { validateEnvironment } from '../src/config/environment';
-import { GeniusService } from '../src/genius/genius.service';
-import type { GeniusSearchSong } from '../src/genius/types/genius-search-song';
+import { AppModule } from '@/app.module';
+import { configureApp } from '@/configure-app';
+import { validateEnvironment } from '@/config/environment';
+import { GeniusService } from '@/genius/genius.service';
+import type { GeniusSongSummary } from '@/genius/types/genius-song-summary';
 
-const song: GeniusSearchSong = {
+const song: GeniusSongSummary = {
   id: 123,
   title: 'Hello',
   primary_artist: { name: 'Adele' },
@@ -125,11 +125,21 @@ describe('Songs search (Fastify e2e)', () => {
   });
 
   it('deduplicates by ID, retains the first occurrence and upstream order', async () => {
-    search.mockResolvedValue([
-      song,
-      { ...song, title: 'Duplicate' },
-      { ...song, id: 321, title: 'Second' },
-    ]);
+    search.mockRestore();
+    app.get(ConfigService).set('GENIUS_ACCESS_TOKEN', 'test-only');
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      Response.json({
+        meta: { status: 200 },
+        response: {
+          hits: [
+            { ...song, title: '' },
+            song,
+            { ...song, title: 'Duplicate' },
+            { ...song, id: 321, title: 'Second' },
+          ].map((result) => ({ type: 'song', result })),
+        },
+      }),
+    );
     const response = await app.inject({
       method: 'GET',
       url: '/api/v1/songs/search?q=Hello',
@@ -142,6 +152,7 @@ describe('Songs search (Fastify e2e)', () => {
       [123, 'Hello'],
       [321, 'Second'],
     ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('falls back from song artwork to thumbnail then header and finally null', async () => {

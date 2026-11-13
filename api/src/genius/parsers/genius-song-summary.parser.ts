@@ -8,7 +8,7 @@ import {
   isRecord,
   isPositiveSafeInteger,
   isNonemptyString,
-} from '../../upstream-validation';
+} from '@/common/upstream/upstream-validation';
 
 export function parseGeniusSongSummary(
   value: unknown,

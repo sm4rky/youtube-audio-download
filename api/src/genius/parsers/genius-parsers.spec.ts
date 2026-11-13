@@ -39,6 +39,24 @@ describe('independent Genius endpoint contracts', () => {
     expect(parseGeniusDetailResponse(detail, 999)).toBeNull();
   });
 
+  it('normalizes duplicate search IDs at the parser boundary, keeping the first valid occurrence in order', () => {
+    const hits = [
+      { ...song, title: '' },
+      song,
+      { ...song, id: 456, title: 'Second song' },
+      { ...song, title: 'Duplicate' },
+      { ...song, id: 456, title: 'Second duplicate' },
+    ].map((result) => ({ type: 'song', result }));
+    const result = parseGeniusSearchResponse({
+      meta: { status: 200 },
+      response: { hits },
+    });
+    expect(result?.map(({ id, title }) => ({ id, title }))).toEqual([
+      { id: 123, title: 'Original fixture' },
+      { id: 456, title: 'Second song' },
+    ]);
+  });
+
   it('retains only validated YouTube media, in source order, with safe defaults and no duplicate URLs', () => {
     const media = [
       {

@@ -1,6 +1,6 @@
-import type { Pagination } from '../../pagination';
-import type { SongSummary } from '../../songs/types/song-summary';
-import type { GeniusArtistSongsSort } from '../../genius/types/genius-artist-songs';
+import type { Pagination } from '@/common/pagination/pagination';
+import type { SongSummary } from '@/songs/types/song-summary';
+import type { GeniusArtistSongsSort } from '@/genius/types/genius-artist-songs';
 
 export interface ArtistSongsResponse {
   artistId: number;
