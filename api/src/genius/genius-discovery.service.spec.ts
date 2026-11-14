@@ -120,16 +120,16 @@ describe.each(['artist', 'album'] as const)(
       },
     );
 
-    it('rejects an HTML content type before reading a JSON-shaped body', async () => {
+    it('accepts validated Developer API JSON with a mislabeled HTML content type', async () => {
       const response = Response.json(envelope, {
         headers: { 'content-type': 'text/html' },
       });
-      const readBody = jest.spyOn(response, 'json');
       fetchMock.mockResolvedValue(response);
-      await expect(request()).rejects.toMatchObject({
-        response: { statusCode: 502, code: 'GENIUS_UPSTREAM_ERROR' },
-      });
-      expect(readBody).not.toHaveBeenCalled();
+      await expect(request()).resolves.toEqual(
+        resource === 'artist'
+          ? { songs: [], next_page: null }
+          : { tracks: [], next_page: null },
+      );
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 

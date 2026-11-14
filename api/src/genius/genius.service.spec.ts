@@ -154,7 +154,7 @@ describe('GeniusService HTTP boundary', () => {
           ? service.search('Hello')
           : service.getDetail(123);
 
-      it.each([null, 'text/html', 'text/plain'])(
+      it.each([null, 'text/plain'])(
         'rejects %s before reading the JSON body',
         async (contentType) => {
           const response = Response.json(body);
@@ -182,6 +182,34 @@ describe('GeniusService HTTP boundary', () => {
         await expect(request()).resolves.toBeDefined();
         expect(fetchMock).toHaveBeenCalledTimes(1);
       });
+
+      it('accepts validated Genius JSON mislabeled as text/html', async () => {
+        fetchMock.mockResolvedValue(
+          Response.json(body, {
+            headers: { 'content-type': 'text/html; charset=utf-8' },
+          }),
+        );
+        await expect(request()).resolves.toBeDefined();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+
+      it.each([
+        '<!doctype html><html>Challenge</html>',
+        JSON.stringify({ meta: { status: 200 }, response: { unexpected: [] } }),
+      ])(
+        'rejects actual HTML or invalid Genius schema despite a text/html header %#',
+        async (body) => {
+          fetchMock.mockResolvedValue(
+            new Response(body, {
+              headers: { 'content-type': 'text/html; charset=utf-8' },
+            }),
+          );
+          await expect(request()).rejects.toMatchObject({
+            response: { statusCode: 502, code: 'GENIUS_UPSTREAM_ERROR' },
+          });
+          expect(fetchMock).toHaveBeenCalledTimes(1);
+        },
+      );
     },
   );
 

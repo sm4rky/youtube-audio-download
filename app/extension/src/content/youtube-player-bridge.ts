@@ -1,7 +1,7 @@
 import type {
   YouTubePlayerBridge,
   YouTubePlayerErrorCode,
-} from '../../types/youtube.ts';
+} from '../types/youtube.ts';
 
 export class YouTubePlayerError extends Error {
   readonly code: YouTubePlayerErrorCode;

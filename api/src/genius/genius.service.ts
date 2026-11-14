@@ -134,7 +134,13 @@ export class GeniusService {
         ?.split(';')[0]
         .trim()
         .toLowerCase();
-      if (contentType !== 'application/json' && !contentType?.endsWith('+json'))
+      // Genius sometimes labels valid Developer API JSON as text/html.
+      // The body must still parse as JSON and pass the endpoint's runtime parser.
+      if (
+        contentType !== 'application/json' &&
+        !contentType?.endsWith('+json') &&
+        contentType !== 'text/html'
+      )
         throw this.upstreamError(context);
 
       // Keep the abort timer active until the entire body has been read.

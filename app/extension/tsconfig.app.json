@@ -9,8 +9,6 @@
     "module": "esnext",
     "types": ["vite/client", "chrome-types"],
     "strict": true,
-    "allowJs": true,
-    "checkJs": true,
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
@@ -28,5 +26,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "public/content.js"]
+  "include": ["src"]
 }

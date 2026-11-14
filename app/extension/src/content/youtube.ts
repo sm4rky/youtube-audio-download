@@ -1,14 +1,14 @@
 import {
   isPopupToContentMessage,
   YOUTUBE_MESSAGE,
-} from '../lib/youtube/messages.ts';
+} from '../lib/youtube-messages.ts';
 import {
   createYouTubePlayerBridge,
   YouTubePlayerError,
-} from '../lib/youtube/player-bridge.ts';
+} from './youtube-player-bridge.ts';
 import type { YouTubeContentResponse } from '../types/youtube.ts';
 
-export function installYouTubeContentListener(): void {
+function installYouTubeContentListener(): void {
   const bridge = createYouTubePlayerBridge();
   chrome.runtime.onMessage.addListener(
     (
@@ -79,3 +79,5 @@ export function installYouTubeContentListener(): void {
     },
   );
 }
+
+installYouTubeContentListener();

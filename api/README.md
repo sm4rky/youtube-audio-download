@@ -202,7 +202,7 @@ Input validation uses the global ValidationPipe and returns HTTP 400. Genius fai
 - HTTP 504 `GENIUS_TIMEOUT`.
 - HTTP 502 `GENIUS_UPSTREAM_ERROR`: network failure, unexpected HTTP status, invalid response content type, invalid JSON/envelope, invalid required detail data, or mismatched detail ID.
 
-Genius and LRCLIB validate HTTP status, then require `application/json` or a `+json` response media type, read JSON as `unknown`, and validate provider schemas with their parsers. Missing content types and HTML responses fail with the existing upstream error codes. No automatic retries are performed. Redirects are rejected instead of forwarding the token to another host. Logs contain only safe error codes/statuses, never tokens, raw upstream bodies or authentication headers. Upstream errors are not converted into empty search results.
+Both providers validate HTTP status and content type, read JSON as `unknown`, and validate provider schemas with their parsers. LRCLIB requires `application/json` or a `+json` media type. Genius also accepts `text/html` because a live Developer API response returned valid JSON with that header. This exception still requires successful JSON parsing and the endpoint-specific schema. Actual HTML/challenge bodies, invalid JSON, missing/unsupported media types and invalid schemas fail with the existing upstream error codes. No automatic retries are performed. Redirects are rejected instead of forwarding the token to another host. Logs contain only safe error codes/statuses, never tokens, raw upstream bodies or authentication headers. Upstream errors are not converted into empty search results.
 
 ## Try in Postman or curl
 

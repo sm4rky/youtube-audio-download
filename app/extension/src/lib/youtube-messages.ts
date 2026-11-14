@@ -1,7 +1,7 @@
 import type {
   PopupToContentMessage,
   YouTubeContentResponse,
-} from '../../types/youtube.ts';
+} from '../types/youtube.ts';
 
 export const YOUTUBE_MESSAGE = {
   GET_SNAPSHOT: 'youtube/get-snapshot',

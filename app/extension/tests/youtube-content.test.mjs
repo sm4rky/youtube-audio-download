@@ -6,11 +6,12 @@ import {
   isPopupToContentMessage,
   isYouTubeContentResponse,
   YOUTUBE_MESSAGE,
-} from '../src/lib/youtube/messages.ts';
+} from '../src/lib/youtube-messages.ts';
 import {
   getActiveYouTubeTabId,
   sendYouTubeMessage,
-} from '../src/lib/youtube/client.ts';
+  YouTubeClientError,
+} from '../src/lib/chrome-tabs.ts';
 
 const content = readFileSync(
   new URL('../dist/content.js', import.meta.url),
@@ -414,17 +415,57 @@ test('popup client rejects unsupported tabs, invalid replies and disconnected co
   );
   await assert.rejects(
     sendYouTubeMessage(42, { type: YOUTUBE_MESSAGE.GET_SNAPSHOT }),
-    /Invalid response/,
+    { code: 'INVALID_RESPONSE' },
   );
   globalThis.chrome.tabs.sendMessage = async () => {
     throw new Error('Tab closed');
   };
   await assert.rejects(
     sendYouTubeMessage(42, { type: YOUTUBE_MESSAGE.GET_SNAPSHOT }),
-    /Tab closed/,
+    { code: 'CONTENT_UNAVAILABLE' },
   );
   await assert.rejects(
     sendYouTubeMessage(-1, { type: YOUTUBE_MESSAGE.GET_SNAPSHOT }),
     /Invalid YouTube request/,
   );
+});
+
+test('client distinguishes a missing receiver from an incompatible old response and preserves the cause', async (t) => {
+  const originalChrome = globalThis.chrome;
+  t.after(() => {
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  });
+  const cause = new Error(
+    'Could not establish connection. Receiving end does not exist.',
+  );
+  globalThis.chrome = {
+    tabs: {
+      async sendMessage() {
+        throw cause;
+      },
+      async query() {
+        throw new Error('Cannot access tab');
+      },
+    },
+  };
+  await assert.rejects(
+    sendYouTubeMessage(42, { type: YOUTUBE_MESSAGE.GET_SNAPSHOT }),
+    (error) => {
+      assert.ok(error instanceof YouTubeClientError);
+      assert.equal(error.code, 'CONTENT_UNAVAILABLE');
+      assert.equal(error.cause, cause);
+      assert.match(error.message, /Reload this YouTube tab/);
+      return true;
+    },
+  );
+  globalThis.chrome.tabs.sendMessage = async () => ({
+    currentTime: 3,
+    title: 'Old helper response',
+  });
+  await assert.rejects(
+    sendYouTubeMessage(42, { type: YOUTUBE_MESSAGE.GET_SNAPSHOT }),
+    { code: 'INVALID_RESPONSE' },
+  );
+  await assert.rejects(getActiveYouTubeTabId(), { code: 'TAB_UNAVAILABLE' });
 });

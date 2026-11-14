@@ -18,6 +18,12 @@ export interface YouTubePlayerBridge {
 export type YouTubePlayerErrorCode =
   'PLAYER_UNAVAILABLE' | 'INVALID_COMMAND' | 'INVALID_SEEK' | 'PLAYBACK_FAILED';
 
+export type YouTubeClientErrorCode =
+  | 'UNSUPPORTED_TAB'
+  | 'TAB_UNAVAILABLE'
+  | 'CONTENT_UNAVAILABLE'
+  | 'INVALID_RESPONSE';
+
 export type PopupToContentMessage =
   | { type: 'youtube/get-snapshot' }
   | { type: 'youtube/seek-to'; timeMs: number }

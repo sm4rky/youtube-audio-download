@@ -6,7 +6,7 @@ export default defineConfig({
   build: {
     emptyOutDir: false,
     lib: {
-      entry: fileURLToPath(new URL('./public/content.js', import.meta.url)),
+      entry: fileURLToPath(new URL('./src/content/youtube.ts', import.meta.url)),
       formats: ['iife'],
       name: 'AudioMintContent',
       fileName: () => 'content.js',
