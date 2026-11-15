@@ -1,11 +1,12 @@
 import { QueryClient } from '@tanstack/react-query';
+import { SEARCH_CACHE_MAX_AGE } from '../storage/query-cache-persister.ts';
 
-// One cache per popup app. Closing the popup destroys this in-memory client.
+// One live cache per popup, restored by PersistQueryClientProvider.
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
-      gcTime: 5 * 60 * 1000,
+      gcTime: SEARCH_CACHE_MAX_AGE,
       retry: false,
       refetchOnMount: false,
       refetchOnWindowFocus: false,

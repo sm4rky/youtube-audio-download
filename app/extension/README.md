@@ -1,6 +1,6 @@
 # AudioMint extension foundation
 
-React, TypeScript and Vite popup with a Manifest V3 YouTube content script. The popup is intentionally blank while its final UI is being designed. YouTube messaging, title normalization and a typed backend search client are available for future UI integration. Opening the popup does not read a video or send an API request.
+React, TypeScript and Vite popup with a Manifest V3 YouTube content script. The popup restores its session, validates the active YouTube video, and searches Genius through the backend. A shared layout hosts the loading and search results screens. Result rows provide hover, focus and pressed feedback.
 
 ## Build and checks
 
@@ -26,13 +26,20 @@ src/types/youtube.ts                   Snapshot, bridge, command and response co
 src/types/song.ts                      Search response types inferred from Zod
 src/types/song-search.ts               Store state, actions and injected dependencies
 src/lib/song-title-normalizer.ts       Pure title normalization and manual validation
-src/stores/song-search.store.ts        Client state: title, submitted query and source-read actions
+src/stores/song-search.store.ts        Video identity and source/query context
+src/stores/navigation.store.ts         Persisted loading/search-results view
+src/storage/session-storage.ts         Chrome session-storage adapter
+src/storage/query-cache-persister.ts   Official TanStack async cache persistence
 src/api/api-client.ts                  Shared Axios transport and defaults
 src/api/songs.api.ts                   Search API function and response validation
 src/schemas/songs.schema.ts            Runtime schemas for the backend search contract
 src/queries/songs.queries.ts           Search query key/options
 src/app/query-client.ts                Popup QueryClient and query defaults
-src/app/App.tsx                        Blank popup entry; no automatic side effects
+src/app/App.tsx                        Bootstrap, video validation and persistence provider
+src/app/view-resolver.tsx              Query-driven loading/results transition
+src/screens/search-results-screen.tsx  Manual search, result list and request states
+src/screens/error-screen.tsx           Dedicated source/search error presentation
+src/components/song-result.tsx         Artwork, metadata and row interaction feedback
 src/content/youtube-player-bridge.ts   Player primitives
 src/lib/youtube-messages.ts            Message constants and runtime guards
 src/lib/chrome-tabs.ts                 Active-tab lookup and async messaging
@@ -41,6 +48,7 @@ vite.content.config.ts                 Classic content-script bundle
 tests/youtube-content.test.mjs         Built-artifact and bridge/client tests
 tests/song-search.test.mjs             Normalization and client-state store tests
 tests/songs-api.test.mjs               Axios and server-state integration tests
+tests/popup-persistence.test.mjs       Reopen, identity, cache filtering and storage failure tests
 ~~~
 
 ## Search foundation
@@ -53,9 +61,13 @@ Search responses are read as unknown and validated with Zod at the API boundary.
 
 songSearchOptions(query) defines the existing search query with key ['songs', 'search', trimmedQuery]. All request-affecting search input is included in the key. Trimming does not remove internal whitespace, change case, normalize Unicode or strip video labels. Invalid/empty query options are disabled; queryFn also validates imperative query calls because fetchQuery does not honor enabled. API functions forward supplied input without normalization or validation; input rules belong to the caller/store/query flow. The query function passes TanStack Query's AbortSignal to Axios. Results, loading, backend errors and retry/refetch belong exclusively to TanStack Query. Changing the key isolates old results from the current query; unmounting the last observer cancels an in-flight request whose signal is consumed. A future UI retries through the query's refetch(), not a Zustand HTTP action.
 
-A single QueryClient is provided in main.tsx above App. Defaults are staleTime 5 minutes, inactive gcTime 5 minutes, retry false, refetchOnMount false, refetchOnWindowFocus false, refetchOnReconnect false and no polling. The first enabled query still fetches when it has no cached data. These choices allow reuse during the popup lifetime while keeping later network activity explicit. Mutations also default to no retries; no mutation API is implemented.
+App first hydrates the Zustand navigation and search context, then reads a fresh snapshot from the active YouTube tab. A different video ID resets the main view and automatic query. Only after this check does PersistQueryClientProvider restore the server cache. Its versioned buster includes the confirmed video ID, so cached results for another video cannot be restored even if the normalized query is identical. A loading screen is shown during bootstrap and restoration. A failed source read offers an explicit retry and cannot enable backend search.
 
-useSongSearchStore starts idle. initialize() reads a valid YouTube snapshot, preserves its title, derives automaticQuery and sets query. It does not call a backend or populate server state. submit(value) synchronously trims and validates a manually entered query, updates query/validationError, and preserves the original title and automatic query. createSongSearchStore(dependencies) supplies isolated Chrome boundaries for tests. dispose() invalidates pending source reads so their late responses cannot update the store. Future UI code must pair initialization with cleanup and use songSearchOptions(query) to consume server state; App.tsx remains blank, so no source read or search starts automatically.
+Query keys remain ['songs', 'search', trimmedQuery]. Search success and empty results transition to the search-results view; a submitted manual query stays on that screen while loading. Source failures and completed search errors render a dedicated ErrorScreen with its own heading, description and retry action. Loading copy appears only during loading. Error presentation is derived from request/source state and adds no persisted navigation view. Retry uses the same query. The list preserves API order, shows artwork with a fallback, and displays year when available. The current search summary contract has no album field, so the list does not invent album metadata or issue detail requests. Per user direction, there is no Back button on Search Results. Settings keeps its existing visual interaction without adding a settings screen.
+
+A single QueryClient is provided by PersistQueryClientProvider inside App. staleTime remains 5 minutes; inactive gcTime and persistence maxAge are both 24 hours. Retry, refetchOnMount, refetchOnWindowFocus, refetchOnReconnect and polling remain disabled. The official async-storage persister writes only successful song-search queries, excludes mutations/unrelated cache entries, and uses throttleTime 0 to avoid a delayed save after the popup closes. Invalid/expired/busted caches are discarded by TanStack persistence. Query restore completes before query observers fetch. Cached results are reused after reopen without a required new request.
+
+useSongSearchStore owns videoId, title, automaticQuery and submitted query. initialize() preserves the last manual query only for the same video. submit(value) applies the existing manual validation. Request data/loading/errors remain in TanStack Query. Source reads use a generation check to ignore late responses after cleanup. The navigation store persists only its view. Saved client contexts are validated before merging; store actions and transient source/validation errors are excluded from storage.
 
 Automatic queries use NFC, collapsed whitespace and trimming. Known terminal video labels are removed as complete parenthesized, bracketed or vertical-bar suffixes. The allowlist contains Official Music Video, Official Lyric Video, Official Lyrics Video, Official Video, Official Audio, Official MV, Lyric Video, Lyrics Video, 4K, 8K, HD, 720p, 1080p and 2160p. Consecutive suffixes are removed. Bare MV is removed only after a quoted title. Featured artists, acoustic/remix/live version labels and unknown bracket text are preserved. Removing everything falls back to the whitespace-normalized title. Long queries are shortened to the API limit, preferring word and grapheme boundaries while preserving Unicode code points. Manual queries are trimmed and validated against the API's 1-200 character limit without automatic normalization.
 
@@ -65,14 +77,16 @@ The baseline is React + TypeScript + Vite, the existing Tailwind/shadcn UI found
 
 - api: one shared Axios instance and concrete API functions that validate unknown backend responses against Zod schemas. Native Axios transport errors propagate directly.
 - queries: stable query keys and query options for implemented frontend requests. Only song search is connected in this foundation; no future detail/lyrics/discovery API modules are created.
-- stores: original title, submitted query, source-read status/error and input validation. Backend results/loading/errors live in the query cache, not Zustand. Future selected song, navigation, editable drafts and download/preferences state belong in application state when implemented.
+- stores: navigation view, video/source/query context and input validation. Server results and request states belong to TanStack Query.
 - content: YouTube DOM access, playback and content-side Chrome message handling.
 - lib: popup-side tab access, shared Chrome message guards and pure title normalization.
 - schemas: runtime definitions of backend responses.
 - types: shared contracts grouped by domain, with song response types inferred from schemas. File names use kebab-case, React components use PascalCase and hooks start with use.
-- app: blank App component. The shared QueryClient lives in app/query-client.ts and QueryClientProvider is mounted in main.tsx. There is no router or new UI.
+- app: popup bootstrap, one QueryClient, persistence provider and view resolver. PopupLayout owns the shared Header and content region. Loading-to-results transitions use restrained motion with reduced-motion support.
 
-Both QueryClient and Zustand are in memory in the popup's JavaScript context. Closing the popup destroys them. Neither automatically persists data or shares it with content scripts or a service worker. Chrome Storage is the boundary for future session/preferences persistence when a concrete lifetime and field selection are defined. This change adds no Chrome Storage permission, storage adapter, persist middleware, query-cache persistence, sessionStorage or localStorage. Query cache must not be treated as persisted extension session state.
+Zustand uses persist middleware with chrome.storage.session, while server responses use the official TanStack persistence packages through the same extension-specific adapter. The manifest now requests storage permission. Reload the unpacked extension after building to apply that permission. Navigation, search context and cache have distinct versioned keys. Session storage survives closing the popup and is cleared when Chrome ends the extension/browser session. It does not provide long-term preferences storage or cross-context reactive synchronization. Storage failures degrade to memory, so reopen persistence cannot be guaranteed while storage is unavailable or full.
+
+On reopen, hydrate the client context first and verify the active watch URL's video ID. For the same video, reuse the saved title and submitted query without requiring another content-script snapshot. Restore the TanStack cache before displaying the screen; hydration keeps the shared layout visible rather than displaying the search loading screen. Temporary tab/bridge failures preserve saved context for retry. A confirmed different video resets that context and invalidates the previous video's cache. Manual queries retain their submitted text after trimming; unsubmitted input remains local to the results screen. A missing/expired cache requires a new search.
 
 Before implementing forms/editing, persistence, conversion, download or tagging, agree on their dependencies and ownership. Do not mirror server responses into Zustand; a separately editable user draft is a concrete application-state reason to derive new state from an API result.
 
@@ -106,6 +120,6 @@ Replies are either { ok: true, snapshot } or { ok: false, error: { code, message
 
 getActiveYouTubeTabId() and sendYouTubeMessage(tabId, message) are asynchronous. The client validates both outgoing commands and incoming replies. Tab closure, navigation and unavailable content scripts reject the messaging Promise. Typed client errors distinguish active-tab access, a missing content-script receiver and an incompatible response. The client-state store exposes those bridge failures through its sourceError state. After building and reloading AudioMint in chrome://extensions, reload existing YouTube tabs so they receive the current content script.
 
-## Manual verification status
+## Verification status
 
-Automated tests mock Chrome and backend HTTP APIs. The blank popup can be checked by loading app/extension/dist as an unpacked extension: it intentionally renders no search controls or results and sends no search requests. A full YouTube-to-search UI smoke test is deferred until a UI consumes these primitives. Automated HTTP tests use Axios's real fetch adapter with a mocked fetch boundary; TanStack Query tests use isolated clients/observers with the production defaults. No live backend/Genius request is part of these tests. The existing content script remains active on supported YouTube pages.
+Automated tests mock Chrome and HTTP. Persistence tests cover new store/client instances, same/different video identity, exact manual query, legacy context compatibility, cache expiry/busters, success-only filtering and storage failure fallback. A headless Chrome smoke test exercised the actual React app with a fake Chrome session-storage boundary and intercepted backend responses across fresh page contexts. It verified one initial request, cache/manual query restore without another request, different-video invalidation, manual validation, empty/error/retry states and a scrollable 360x600 results layout. This is not a live unpacked-extension test on YouTube. Live YouTube bridge and real backend persistence should be checked separately in the unpacked extension.

@@ -22,7 +22,7 @@ export class YouTubeClientError extends Error {
   }
 }
 
-export async function getActiveYouTubeTabId(): Promise<number> {
+export async function getActiveYouTubeTab(): Promise<{ tabId: number; videoId: string }> {
   let tabs: chrome.tabs.Tab[];
   try {
     tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -41,17 +41,22 @@ export async function getActiveYouTubeTabId(): Promise<number> {
     );
   }
   const url = new URL(tab.url);
+  const videoId = url.searchParams.get('v')?.trim();
   if (
     url.origin !== 'https://www.youtube.com' ||
     url.pathname !== '/watch' ||
-    !url.searchParams.get('v')?.trim()
+    !videoId
   ) {
     throw new YouTubeClientError(
       'UNSUPPORTED_TAB',
       'Not a supported YouTube video.',
     );
   }
-  return tab.id;
+  return { tabId: tab.id, videoId };
+}
+
+export async function getActiveYouTubeTabId(): Promise<number> {
+  return (await getActiveYouTubeTab()).tabId;
 }
 
 export async function sendYouTubeMessage(

@@ -1,22 +1,23 @@
-import { create, type StoreApi, type UseBoundStore } from 'zustand';
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { songSearchStateSchema } from '../schemas/song-search.schema.ts';
+import { sessionStorage } from '../storage/session-storage.ts';
 import type {
   SongSearchDependencies,
   SongSearchState,
   SongSearchStore,
 } from '../types/song-search.ts';
 import {
-  getActiveYouTubeTabId,
+  getActiveYouTubeTab,
   sendYouTubeMessage,
-  YouTubeClientError,
 } from '../lib/chrome-tabs.ts';
 import { YOUTUBE_MESSAGE } from '../lib/youtube-messages.ts';
-import {
-  normalizeTitleToQuery,
-  validateManualQuery,
-} from '../lib/song-title-normalizer.ts';
+import { validateManualQuery } from '../lib/song-title-normalizer.ts';
+import { readYouTubeSource } from '../lib/youtube-source.ts';
 
 function initialState(): SongSearchState {
   return {
+    videoId: null,
     sourceStatus: 'idle',
     sourceError: null,
     title: '',
@@ -28,8 +29,8 @@ function initialState(): SongSearchState {
 
 export function createSongSearchStore(
   dependencies: SongSearchDependencies,
-): UseBoundStore<StoreApi<SongSearchStore>> {
-  return create<SongSearchStore>()((set) => {
+) {
+  return create<SongSearchStore>()(persist((set, get) => {
     let generation = 0;
 
     function invalidate(): number {
@@ -39,54 +40,13 @@ export function createSongSearchStore(
 
     return {
       ...initialState(),
-      async initialize(): Promise<void> {
+      async initialize({ restore = false } = {}): Promise<void> {
         const current = invalidate();
-        set({ ...initialState(), sourceStatus: 'loading' });
-        try {
-          const tabId = await dependencies.getActiveTabId();
+        const previous = get();
+        set({ sourceStatus: 'loading', sourceError: null, validationError: null });
+        for await (const update of readYouTubeSource(dependencies, previous, restore)) {
           if (current !== generation) return;
-          const response = await dependencies.getSnapshot(tabId);
-          if (current !== generation) return;
-          if (!response.ok) {
-            set({
-              sourceStatus: 'unavailable',
-              sourceError:
-                'The YouTube player is not ready. Let the video load and retry.',
-            });
-            return;
-          }
-          if (response.snapshot.videoId === null) {
-            set({
-              sourceStatus: 'unsupported',
-              sourceError: 'Open a YouTube watch video, then retry.',
-            });
-            return;
-          }
-          const title = response.snapshot.title;
-          const query = normalizeTitleToQuery(title);
-          if (!query) {
-            set({
-              sourceStatus: 'unavailable',
-              sourceError:
-                'The video title is not ready. Let the page load and retry.',
-            });
-            return;
-          }
-          set({ sourceStatus: 'ready', title, automaticQuery: query, query });
-        } catch (error: unknown) {
-          if (current !== generation) return;
-          const unsupported =
-            error instanceof YouTubeClientError &&
-            error.code === 'UNSUPPORTED_TAB';
-          let sourceError =
-            'Cannot read the YouTube video. Reload the tab if needed, then retry.';
-          if (error instanceof YouTubeClientError) sourceError = error.message;
-          if (unsupported)
-            sourceError = 'Open a YouTube watch video, then retry.';
-          set({
-            sourceStatus: unsupported ? 'unsupported' : 'unavailable',
-            sourceError,
-          });
+          set(update);
         }
       },
       submit(value: string): void {
@@ -106,11 +66,23 @@ export function createSongSearchStore(
         invalidate();
       },
     };
-  });
+  }, {
+    name: 'audiomint-song-search-v1',
+    version: 1,
+    storage: createJSONStorage(() => sessionStorage),
+    skipHydration: true,
+    partialize: ({ videoId, title, automaticQuery, query }) => ({
+      videoId, title, automaticQuery, query,
+    }),
+    merge: (saved, current) => {
+      const result = songSearchStateSchema.safeParse(saved);
+      return result.success ? { ...current, ...result.data } : current;
+    },
+  }));
 }
 
 export const useSongSearchStore = createSongSearchStore({
-  getActiveTabId: getActiveYouTubeTabId,
+  getActiveTab: getActiveYouTubeTab,
   getSnapshot: (tabId) =>
     sendYouTubeMessage(tabId, { type: YOUTUBE_MESSAGE.GET_SNAPSHOT }),
 });

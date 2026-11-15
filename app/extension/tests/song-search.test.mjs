@@ -115,7 +115,7 @@ const snapshot = {
 
 function fixture(source = snapshot) {
   return createSongSearchStore({
-    getActiveTabId: async () => 42,
+    getActiveTab: async () => ({ tabId: 42, videoId: 'video' }),
     getSnapshot: async () => source,
   });
 }
@@ -163,10 +163,11 @@ test('Zustand subscribers unsubscribe and actions survive source resets', async 
   const changes = [];
   const unsubscribe = store.subscribe((state) => changes.push(state.sourceStatus));
   await initialize();
-  assert.deepEqual(changes, ['loading', 'ready']);
+  assert.deepEqual([...new Set(changes)], ['loading', 'ready']);
+  const notificationCount = changes.length;
   unsubscribe();
   await initialize();
-  assert.equal(changes.length, 2);
+  assert.equal(changes.length, notificationCount);
   assert.equal(store.getState().initialize, initialize);
 });
 
@@ -188,9 +189,9 @@ test('typed source errors are preserved and explicit reinitialization can recove
   for (const code of ['CONTENT_UNAVAILABLE', 'INVALID_RESPONSE', 'TAB_UNAVAILABLE', 'UNSUPPORTED_TAB']) {
     let available = false;
     const store = createSongSearchStore({
-      getActiveTabId: async () => {
+      getActiveTab: async () => {
         if (!available) throw new YouTubeClientError(code, 'Reload and retry.');
-        return 42;
+        return { tabId: 42, videoId: 'video' };
       },
       getSnapshot: async () => snapshot,
     });
@@ -208,7 +209,7 @@ test('late source reads cannot overwrite a newer initialization', async () => {
   let finish;
   let reads = 0;
   const store = createSongSearchStore({
-    getActiveTabId: async () => 42,
+    getActiveTab: async () => ({ tabId: 42, videoId: 'video' }),
     getSnapshot: async () => ++reads === 1
       ? new Promise((resolve) => { finish = resolve; })
       : { ...snapshot, snapshot: { ...snapshot.snapshot, title: 'Newest' } },
@@ -226,7 +227,7 @@ test('dispose suppresses pending Chrome reads and reinitialization remains possi
   let finish;
   let reads = 0;
   const store = createSongSearchStore({
-    getActiveTabId: async () => 42,
+    getActiveTab: async () => ({ tabId: 42, videoId: 'video' }),
     getSnapshot: async () => ++reads === 1
       ? new Promise((resolve) => { finish = resolve; })
       : snapshot,

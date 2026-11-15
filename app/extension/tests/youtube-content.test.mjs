@@ -108,7 +108,7 @@ test('the build contains the popup and all manifest-referenced content scripts',
     readFileSync(new URL('../dist/manifest.json', import.meta.url), 'utf8'),
   );
   assert.equal(manifest.manifest_version, 3);
-  assert.deepEqual(manifest.permissions, ['tabs']);
+  assert.deepEqual(manifest.permissions, ['tabs', 'storage']);
   assert.deepEqual(manifest.content_scripts[0].matches, [
     'https://www.youtube.com/*',
   ]);

@@ -302,7 +302,7 @@ test('popup defaults prevent automatic retry, remount/focus/reconnect refetch an
     assert.equal(defaults[field], false);
   }
   assert.equal(defaults.staleTime, 300_000);
-  assert.equal(defaults.gcTime, 300_000);
+  assert.equal(defaults.gcTime, 86_400_000);
   const requests = mockTransport(t, () => Response.json({ query: 'Song', items: [] }));
   const client = createTestQueryClient(t);
   const options = { ...songSearchOptions('Song'), staleTime: 0 };

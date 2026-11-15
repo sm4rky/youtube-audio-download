@@ -1,6 +1,7 @@
 import type { YouTubeContentResponse } from './youtube.ts';
 
 export interface SongSearchState {
+  videoId: string | null;
   sourceStatus: 'idle' | 'loading' | 'ready' | 'unsupported' | 'unavailable';
   sourceError: string | null;
   title: string;
@@ -10,12 +11,12 @@ export interface SongSearchState {
 }
 
 export interface SongSearchDependencies {
-  getActiveTabId(): Promise<number>;
+  getActiveTab(): Promise<{ tabId: number; videoId: string }>;
   getSnapshot(tabId: number): Promise<YouTubeContentResponse>;
 }
 
 export interface SongSearchStore extends SongSearchState {
-  initialize(): Promise<void>;
+  initialize(options?: { restore?: boolean }): Promise<void>;
   submit(value: string): void;
   dispose(): void;
 }
