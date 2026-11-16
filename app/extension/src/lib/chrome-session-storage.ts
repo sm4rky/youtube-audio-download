@@ -1,8 +1,9 @@
 import type { StateStorage } from 'zustand/middleware';
 
-// Session storage is extension-only. Storage failures fall back to memory so
-// they cannot prevent the popup from reading a video or searching.
-export const sessionStorage = {
+// Adapt chrome.storage.session to the storage interface used by Zustand and the query persister.
+// Failed reads return null; failed writes and removals are ignored so the popup can keep working.
+// In-memory state remains usable, but persistence across popup reopen is not guaranteed on failure.
+export const chromeSessionStorage = {
   async getItem(name) {
     try {
       const storage = globalThis.chrome?.storage?.session;

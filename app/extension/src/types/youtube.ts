@@ -15,6 +15,19 @@ export interface YouTubePlayerBridge {
   resume(): Promise<void>;
 }
 
+export interface YouTubePlayerState {
+  video: HTMLVideoElement | null;
+  videoId: string | null;
+  adPlaying: boolean;
+  available: boolean;
+}
+
+export interface YouTubePlaybackMessage {
+  videoId: string | null;
+  available: boolean;
+  response: YouTubeContentResponse;
+}
+
 export type YouTubePlayerErrorCode =
   'PLAYER_UNAVAILABLE' | 'INVALID_COMMAND' | 'INVALID_SEEK' | 'PLAYBACK_FAILED';
 

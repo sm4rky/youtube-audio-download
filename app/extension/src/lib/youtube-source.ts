@@ -1,12 +1,18 @@
-import { YouTubeClientError } from './chrome-tabs.ts';
+import { YouTubeClientError } from '../errors/youtube-client.error.ts';
 import { normalizeTitleToQuery } from './song-title-normalizer.ts';
-import type { SongSearchDependencies } from '../types/song-search.ts';
-import type { YouTubeSourceContext, YouTubeSourceUpdate } from '../types/youtube-source.ts';
+import type {
+  YouTubeSourceContext,
+  YouTubeSourceDependencies,
+  YouTubeSourceUpdate,
+} from '../types/youtube-source.ts';
+
+const SOURCE_RETRY_LIMIT = 20;
+const SOURCE_RETRY_DELAY_MS = 150;
 
 // Yield the confirmed identity before reading the player so stale context is cleared
 // even when the player fails. The caller can stop between steps when disposed.
 export async function* readYouTubeSource(
-  dependencies: SongSearchDependencies,
+  dependencies: YouTubeSourceDependencies,
   previous: YouTubeSourceContext,
   restore = false,
 ): AsyncGenerator<YouTubeSourceUpdate, void, void> {
@@ -15,13 +21,34 @@ export async function* readYouTubeSource(
     const sameVideo = previous.videoId === videoId;
     yield sameVideo
       ? { sourceStatus: 'loading' }
-      : { videoId, title: '', automaticQuery: '', query: '', sourceStatus: 'loading' };
+      : {
+          videoId,
+          title: '',
+          automaticQuery: '',
+          query: '',
+          sourceStatus: 'loading',
+        };
     // A saved search needs a verified video identity, not another player read.
     if (restore && sameVideo && previous.title.trim() && previous.query) {
       yield { sourceStatus: 'ready' };
       return;
     }
-    const response = await dependencies.getSnapshot(tabId);
+    let response = await dependencies.getSnapshot(tabId);
+    // SPA navigation can update the watch URL before its title/canonical metadata.
+    // Do not submit the previous video's title as the new video's search query.
+    for (
+      let retry = 0;
+      !sameVideo && previous.videoId !== null && retry < SOURCE_RETRY_LIMIT && (
+        !response.ok ||
+        response.snapshot.videoId !== videoId ||
+        response.snapshot.title === previous.title
+      );
+      retry += 1
+    ) {
+      await new Promise<void>((resolve) => setTimeout(resolve, SOURCE_RETRY_DELAY_MS));
+      yield { sourceStatus: 'loading' };
+      response = await dependencies.getSnapshot(tabId);
+    }
     if (!response.ok) {
       yield {
         sourceStatus: 'unavailable',
@@ -60,9 +87,12 @@ export async function* readYouTubeSource(
       error.code === 'UNSUPPORTED_TAB';
     let sourceError =
       'Cannot read the YouTube video. Reload the tab if needed, then retry.';
-    if (error instanceof YouTubeClientError) sourceError = error.message;
-    if (unsupported)
+    if (error instanceof YouTubeClientError) {
+      sourceError = error.message;
+    }
+    if (unsupported) {
       sourceError = 'Open a YouTube watch video, then retry.';
+    }
     yield {
       sourceStatus: unsupported ? 'unsupported' : 'unavailable',
       sourceError,

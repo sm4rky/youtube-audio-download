@@ -8,3 +8,5 @@ import type {
 export type SongArtist = z.infer<typeof songArtistSchema>;
 export type SongSummary = z.infer<typeof songSummarySchema>;
 export type SongSearchResponse = z.infer<typeof songSearchResponseSchema>;
+
+export type SongDetail = z.infer<typeof import('../schemas/songs.schema.ts').songDetailSchema>;

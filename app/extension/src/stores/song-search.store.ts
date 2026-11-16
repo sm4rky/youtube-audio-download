@@ -1,16 +1,16 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { songSearchStateSchema } from '../schemas/song-search.schema.ts';
-import { sessionStorage } from '../storage/session-storage.ts';
+import { chromeSessionStorage } from '../lib/chrome-session-storage.ts';
 import type {
-  SongSearchDependencies,
   SongSearchState,
   SongSearchStore,
 } from '../types/song-search.ts';
+import type { YouTubeSourceDependencies } from '../types/youtube-source.ts';
 import {
   getActiveYouTubeTab,
   sendYouTubeMessage,
-} from '../lib/chrome-tabs.ts';
+} from '../lib/youtube-client.ts';
 import { YOUTUBE_MESSAGE } from '../lib/youtube-messages.ts';
 import { validateManualQuery } from '../lib/song-title-normalizer.ts';
 import { readYouTubeSource } from '../lib/youtube-source.ts';
@@ -28,7 +28,7 @@ function initialState(): SongSearchState {
 }
 
 export function createSongSearchStore(
-  dependencies: SongSearchDependencies,
+  dependencies: YouTubeSourceDependencies,
 ) {
   return create<SongSearchStore>()(persist((set, get) => {
     let generation = 0;
@@ -69,7 +69,7 @@ export function createSongSearchStore(
   }, {
     name: 'audiomint-song-search-v1',
     version: 1,
-    storage: createJSONStorage(() => sessionStorage),
+    storage: createJSONStorage(() => chromeSessionStorage),
     skipHydration: true,
     partialize: ({ videoId, title, automaticQuery, query }) => ({
       videoId, title, automaticQuery, query,

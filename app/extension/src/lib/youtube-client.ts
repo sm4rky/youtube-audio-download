@@ -1,26 +1,12 @@
+import { YouTubeClientError } from '../errors/youtube-client.error.ts';
 import {
   isPopupToContentMessage,
   isYouTubeContentResponse,
 } from './youtube-messages.ts';
 import type {
   PopupToContentMessage,
-  YouTubeClientErrorCode,
   YouTubeContentResponse,
 } from '../types/youtube.ts';
-
-export class YouTubeClientError extends Error {
-  readonly code: YouTubeClientErrorCode;
-
-  constructor(
-    code: YouTubeClientErrorCode,
-    message: string,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = 'YouTubeClientError';
-    this.code = code;
-  }
-}
 
 export async function getActiveYouTubeTab(): Promise<{ tabId: number; videoId: string }> {
   let tabs: chrome.tabs.Tab[];
@@ -53,10 +39,6 @@ export async function getActiveYouTubeTab(): Promise<{ tabId: number; videoId: s
     );
   }
   return { tabId: tab.id, videoId };
-}
-
-export async function getActiveYouTubeTabId(): Promise<number> {
-  return (await getActiveYouTubeTab()).tabId;
 }
 
 export async function sendYouTubeMessage(

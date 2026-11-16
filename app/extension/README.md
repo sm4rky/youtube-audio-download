@@ -24,25 +24,25 @@ Tests use Node's built-in test runner. They execute the built content script in 
 public/manifest.json                   MV3 popup and YouTube matches
 src/types/youtube.ts                   Snapshot, bridge, command and response contracts
 src/types/song.ts                      Search response types inferred from Zod
-src/types/song-search.ts               Store state, actions and injected dependencies
+src/types/song-search.ts               Search state and store actions
 src/lib/song-title-normalizer.ts       Pure title normalization and manual validation
 src/stores/song-search.store.ts        Video identity and source/query context
 src/stores/navigation.store.ts         Persisted loading/search-results view
-src/storage/session-storage.ts         Chrome session-storage adapter
-src/storage/query-cache-persister.ts   Official TanStack async cache persistence
+src/lib/chrome-session-storage.ts         Chrome session-storage adapter
+src/lib/query-cache-persister.ts   Official TanStack async cache persistence
 src/api/api-client.ts                  Shared Axios transport and defaults
 src/api/songs.api.ts                   Search API function and response validation
 src/schemas/songs.schema.ts            Runtime schemas for the backend search contract
 src/queries/songs.queries.ts           Search query key/options
 src/app/query-client.ts                Popup QueryClient and query defaults
-src/app/App.tsx                        Bootstrap, video validation and persistence provider
+src/app/App.tsx                        Session readiness, layout and view resolver
 src/app/view-resolver.tsx              Query-driven loading/results transition
 src/screens/search-results-screen.tsx  Manual search, result list and request states
 src/screens/error-screen.tsx           Dedicated source/search error presentation
 src/components/song-result.tsx         Artwork, metadata and row interaction feedback
 src/content/youtube-player-bridge.ts   Player primitives
 src/lib/youtube-messages.ts            Message constants and runtime guards
-src/lib/chrome-tabs.ts                 Active-tab lookup and async messaging
+src/lib/youtube-client.ts                 Active-tab lookup and async messaging
 src/content/youtube.ts                 Content-script entry and runtime listener
 vite.content.config.ts                 Classic content-script bundle
 tests/youtube-content.test.mjs         Built-artifact and bridge/client tests
@@ -61,11 +61,11 @@ Search responses are read as unknown and validated with Zod at the API boundary.
 
 songSearchOptions(query) defines the existing search query with key ['songs', 'search', trimmedQuery]. All request-affecting search input is included in the key. Trimming does not remove internal whitespace, change case, normalize Unicode or strip video labels. Invalid/empty query options are disabled; queryFn also validates imperative query calls because fetchQuery does not honor enabled. API functions forward supplied input without normalization or validation; input rules belong to the caller/store/query flow. The query function passes TanStack Query's AbortSignal to Axios. Results, loading, backend errors and retry/refetch belong exclusively to TanStack Query. Changing the key isolates old results from the current query; unmounting the last observer cancels an in-flight request whose signal is consumed. A future UI retries through the query's refetch(), not a Zustand HTTP action.
 
-App first hydrates the Zustand navigation and search context, then reads a fresh snapshot from the active YouTube tab. A different video ID resets the main view and automatic query. Only after this check does PersistQueryClientProvider restore the server cache. Its versioned buster includes the confirmed video ID, so cached results for another video cannot be restored even if the normalized query is identical. A loading screen is shown during bootstrap and restoration. A failed source read offers an explicit retry and cannot enable backend search.
+PersistQueryClientProvider is mounted once in main.tsx around App. It restores the query cache using a stable, version-only buster. usePopupSession waits for restoration, hydrates the Zustand stores and verifies the active YouTube video. A confirmed different video clears query cache and selection and resets navigation before query consumers mount. Same-video reopen and retry retain restored cache. The shared layout remains visible during bootstrap; source failures offer explicit retry.
 
 Query keys remain ['songs', 'search', trimmedQuery]. Search success and empty results transition to the search-results view; a submitted manual query stays on that screen while loading. Source failures and completed search errors render a dedicated ErrorScreen with its own heading, description and retry action. Loading copy appears only during loading. Error presentation is derived from request/source state and adds no persisted navigation view. Retry uses the same query. The list preserves API order, shows artwork with a fallback, and displays year when available. The current search summary contract has no album field, so the list does not invent album metadata or issue detail requests. Per user direction, there is no Back button on Search Results. Settings keeps its existing visual interaction without adding a settings screen.
 
-A single QueryClient is provided by PersistQueryClientProvider inside App. staleTime remains 5 minutes; inactive gcTime and persistence maxAge are both 24 hours. Retry, refetchOnMount, refetchOnWindowFocus, refetchOnReconnect and polling remain disabled. The official async-storage persister writes only successful song-search queries, excludes mutations/unrelated cache entries, and uses throttleTime 0 to avoid a delayed save after the popup closes. Invalid/expired/busted caches are discarded by TanStack persistence. Query restore completes before query observers fetch. Cached results are reused after reopen without a required new request.
+A single QueryClient is provided by PersistQueryClientProvider in main.tsx. staleTime remains 5 minutes; inactive gcTime and persistence maxAge are both 24 hours. Retry, refetchOnMount, refetchOnWindowFocus, refetchOnReconnect and polling remain disabled. The official async-storage persister writes only successful song-search and song-detail queries, excludes mutations/unrelated cache entries, and uses throttleTime 0 to avoid a delayed save after the popup closes. Invalid/expired/busted caches are discarded by TanStack persistence. Query restore completes before query observers fetch. Cached results are reused after reopen without a required new request.
 
 useSongSearchStore owns videoId, title, automaticQuery and submitted query. initialize() preserves the last manual query only for the same video. submit(value) applies the existing manual validation. Request data/loading/errors remain in TanStack Query. Source reads use a generation check to ignore late responses after cleanup. The navigation store persists only its view. Saved client contexts are validated before merging; store actions and transient source/validation errors are excluded from storage.
 
@@ -79,7 +79,7 @@ The baseline is React + TypeScript + Vite, the existing Tailwind/shadcn UI found
 - queries: stable query keys and query options for implemented frontend requests. Only song search is connected in this foundation; no future detail/lyrics/discovery API modules are created.
 - stores: navigation view, video/source/query context and input validation. Server results and request states belong to TanStack Query.
 - content: YouTube DOM access, playback and content-side Chrome message handling.
-- lib: popup-side tab access, shared Chrome message guards and pure title normalization.
+- lib: YouTube clients, source orchestration, shared Chrome message guards and title normalization.
 - schemas: runtime definitions of backend responses.
 - types: shared contracts grouped by domain, with song response types inferred from schemas. File names use kebab-case, React components use PascalCase and hooks start with use.
 - app: popup bootstrap, one QueryClient, persistence provider and view resolver. PopupLayout owns the shared Header and content region. Loading-to-results transitions use restrained motion with reduced-motion support.
@@ -118,8 +118,54 @@ Use YOUTUBE_MESSAGE constants with the following JSON payloads.
 
 Replies are either { ok: true, snapshot } or { ok: false, error: { code, message } }. Error codes are PLAYER_UNAVAILABLE, INVALID_COMMAND, INVALID_SEEK and PLAYBACK_FAILED. Unrelated messages and other extension senders are ignored. Snapshot, seek and pause reply synchronously. Resume returns true from the Chrome listener and replies after playback resolves or rejects.
 
-getActiveYouTubeTabId() and sendYouTubeMessage(tabId, message) are asynchronous. The client validates both outgoing commands and incoming replies. Tab closure, navigation and unavailable content scripts reject the messaging Promise. Typed client errors distinguish active-tab access, a missing content-script receiver and an incompatible response. The client-state store exposes those bridge failures through its sourceError state. After building and reloading AudioMint in chrome://extensions, reload existing YouTube tabs so they receive the current content script.
+getActiveYouTubeTab() and sendYouTubeMessage(tabId, message) are asynchronous. The client validates both outgoing commands and incoming replies. Tab closure, navigation and unavailable content scripts reject the messaging Promise. Typed client errors distinguish active-tab access, a missing content-script receiver and an incompatible response. The client-state store exposes those bridge failures through its sourceError state. After building and reloading AudioMint in chrome://extensions, reload existing YouTube tabs so they receive the current content script.
 
 ## Verification status
 
-Automated tests mock Chrome and HTTP. Persistence tests cover new store/client instances, same/different video identity, exact manual query, legacy context compatibility, cache expiry/busters, success-only filtering and storage failure fallback. A headless Chrome smoke test exercised the actual React app with a fake Chrome session-storage boundary and intercepted backend responses across fresh page contexts. It verified one initial request, cache/manual query restore without another request, different-video invalidation, manual validation, empty/error/retry states and a scrollable 360x600 results layout. This is not a live unpacked-extension test on YouTube. Live YouTube bridge and real backend persistence should be checked separately in the unpacked extension.
+Automated tests mock Chrome and HTTP. Persistence tests cover new store/client instances, same/different video identity, exact manual query, legacy context compatibility, cache expiry/busters, success-only filtering and storage failure fallback. Live YouTube bridge and real backend persistence should be checked separately in the unpacked extension.
+
+## Song Details flow
+
+The navigation store is authoritative for `loading`, `search-results` and `song-details`. Search completion only leaves `loading`; cached results never override Song Details. A result click saves only `selectedSongId` in a separate persisted selection store. Back retains the original query/cache. A valid manual search from details submits the existing query flow and opens Search Results.
+
+`GET /songs/:id` returns unknown JSON through Axios, validates it with `songDetailSchema`, and caches it under `['songs', 'detail', id]`. Both successful search and detail queries are persisted. Query restoration completes first, followed by application-state hydration and source verification before query consumers mount. A confirmed different watch video clears selection and resets navigation; missing selection also falls back to results. Live playback is never persisted.
+
+Song Details includes the shared Header Back control, search, artwork/fallback, structured artist names separated by commas and `ft.`, an optional album row, play/pause, playback rate, timeline/time labels, and visual-only Edit Lyrics/Download MP3/secondary controls. Artist and album identities remain in query data; their labels have no discovery handlers. Lyrics, editing, download, settings and discovery functionality are not implemented.
+
+A popup-scoped Chrome port receives an initial snapshot and native `timeupdate`, `play`, `pause`, `seeked`, `durationchange`, `ratechange`, `loadedmetadata` and `emptied` events. A 500ms lightweight check watches URL, video-element replacement and availability, not the playback clock. `yt-navigate-finish` also triggers identity checks. Disconnect removes listeners and the timer. The watch URL videoId alone starts a new source session; duration/time/media changes do not. Missing media and YouTube's existing ad-state marker temporarily disable controls without clearing metadata/selection. This is a minimal availability guard, not comprehensive ad detection.
+
+The timeline previews a drag locally, commits one seek on release or keyboard commit, and then returns to actual snapshots. Bridge replies and subsequent events reconcile seek latency; the target is not persisted or forced into playback state. Command failures disable controls until a subsequent usable snapshot.
+
+Automated tests mock Chrome/HTTP and exercise detail validation/cache persistence, selection/navigation restoration and Back cache reuse, native stream events/cleanup, play/pause/seek reconciliation, media replacement and URL changes. Existing source reset tests remain in place. No live unpacked-extension/YouTube or real ad verification was performed for this flow.
+
+
+Search Results and Song Details now share the same transparent search form. Details uses a square, clipped artwork area with reduced-motion-safe hover zoom, a timeline with symbol-only play/pause and 5-second skip controls below it and no speed label. The live source watcher remains mounted on both screens. During autoplay initialization, stale canonical metadata is rejected and source reads briefly retry while the previous title is still present, preventing it from being immediately submitted for the new watch identity.
+
+## YouTube code map
+
+The files follow runtime and responsibility. Content files run in the YouTube tab. Clients run in the popup. The hook connects the playback client to React.
+
+~~~text
+src/
+  content/
+    youtube.ts                   Content entry point and command routing
+    youtube-player-bridge.ts     DOM/player access, availability, snapshots and controls
+    youtube-playback-stream.ts   Media/navigation listeners and outgoing port updates
+  hooks/
+    use-youtube-playback.ts       React state and connection lifecycle
+  lib/
+    youtube-client.ts            Active-tab lookup and request/response messaging
+    youtube-playback-client.ts   Playback port connection and command reconciliation
+    youtube-source.ts            Source restoration, transition retry and query preparation
+    youtube-messages.ts          Shared message/port constants and runtime guards
+  types/
+    youtube.ts                   Player, request, response and playback-message contracts
+    youtube-source.ts            Source context, updates and injected dependencies
+    playback.ts                  Popup playback state, connection and controls
+~~~
+
+File renames are chrome-tabs.ts to youtube-client.ts, lib/youtube-playback.ts to lib/youtube-playback-client.ts, and content/youtube-playback.ts to content/youtube-playback-stream.ts. Imports and tests use the new paths.
+
+The player bridge owns video lookup, watch identity and availability checks. The stream observes events and publishes typed updates. The playback client validates the complete envelope before accepting identity or playback updates. Both sides share the port constant and protocol definition in youtube-messages.ts/types/youtube.ts.
+
+The source workflow uses YouTubeSourceDependencies from types/youtube-source.ts. Its async generator publishes intermediate updates so the store can clear old context as soon as a new identity is confirmed and stop stale reads between asynchronous steps. The store owns state updates and generation cancellation. The React hook owns mounting, disposal and exposing playback state to the UI.

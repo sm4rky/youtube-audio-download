@@ -1,7 +1,5 @@
-import { useState } from 'react';
-import { ArrowRight, Search, SearchX } from 'lucide-react';
-import { Input } from '../components/ui/input.tsx';
-import { Button } from '../components/ui/button.tsx';
+import { SearchX } from 'lucide-react';
+import { SongSearchInput } from '../components/song-search-input.tsx';
 import { SongResult } from '../components/song-result.tsx';
 import { useSongSearchStore } from '../stores/song-search.store.ts';
 import type { SongSummary } from '../types/song.ts';
@@ -15,41 +13,10 @@ interface SearchResultsScreenProps {
 
 export function SearchResultsScreen({ items, pending, fetching, onRetry }: SearchResultsScreenProps) {
   const query = useSongSearchStore((state) => state.query);
-  const validationError = useSongSearchStore((state) => state.validationError);
-  const [draft, setDraft] = useState(query);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col pt-6" aria-labelledby="search-results-heading">
-      <form onSubmit={(event) => {
-        event.preventDefault();
-        const store = useSongSearchStore.getState();
-        store.submit(draft);
-        const submitted = useSongSearchStore.getState();
-        if (!submitted.validationError && submitted.query === query) onRetry();
-      }}>
-        <label htmlFor="song-query" className="sr-only">Search Genius</label>
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-3 left-3 size-4 text-[#2a1a11]/45" aria-hidden="true" />
-          <Input
-            id="song-query"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Song or artist"
-            autoComplete="off"
-            aria-invalid={Boolean(validationError)}
-            aria-describedby={validationError ? 'song-query-error' : undefined}
-            className="h-10 rounded-xl border-[#2a1a11]/12 bg-[#fff9ee]/65 pr-11 pl-9 text-xs! focus-visible:border-[#d97439]/50 focus-visible:ring-[#d97439]/15"
-          />
-          <Button
-            type="submit"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Search songs"
-            className="absolute top-1 right-1 cursor-pointer rounded-lg text-[#99491f] hover:bg-[#d97439]/12"
-          ><ArrowRight className="size-4" aria-hidden="true" /></Button>
-        </div>
-        {validationError && <p id="song-query-error" role="alert" className="mt-2 text-[11px] text-[#a33b24]">{validationError}</p>}
-      </form>
+      <SongSearchInput key={query} id="song-query" onSubmitted={(sameQuery) => { if (sameQuery) onRetry(); }} />
 
       <div className="mt-6 mb-4 shrink-0">
         <h1 id="search-results-heading" className="text-[23px] leading-tight font-semibold tracking-[-0.6px]">Select a song</h1>

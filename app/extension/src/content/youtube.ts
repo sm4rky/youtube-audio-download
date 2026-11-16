@@ -1,10 +1,12 @@
+import { YouTubePlayerError } from '../errors/youtube-player.error.ts';
+import { installPlaybackStream } from './youtube-playback-stream.ts';
 import {
   isPopupToContentMessage,
   YOUTUBE_MESSAGE,
 } from '../lib/youtube-messages.ts';
 import {
   createYouTubePlayerBridge,
-  YouTubePlayerError,
+  getYouTubePlayerState,
 } from './youtube-player-bridge.ts';
 import type { YouTubeContentResponse } from '../types/youtube.ts';
 
@@ -52,6 +54,9 @@ function installYouTubeContentListener(): void {
         return false;
       }
       try {
+        if (message.type !== YOUTUBE_MESSAGE.GET_SNAPSHOT && getYouTubePlayerState().adPlaying) {
+          throw new YouTubePlayerError('PLAYER_UNAVAILABLE', 'Player temporarily unavailable.');
+        }
         switch (message.type) {
           case YOUTUBE_MESSAGE.GET_SNAPSHOT:
             break;
@@ -81,3 +86,5 @@ function installYouTubeContentListener(): void {
 }
 
 installYouTubeContentListener();
+
+installPlaybackStream();

@@ -1,3 +1,4 @@
+import { YouTubeClientError } from '../src/errors/youtube-client.error.ts';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { test } from 'node:test';
@@ -8,10 +9,9 @@ import {
   YOUTUBE_MESSAGE,
 } from '../src/lib/youtube-messages.ts';
 import {
-  getActiveYouTubeTabId,
+  getActiveYouTubeTab,
   sendYouTubeMessage,
-  YouTubeClientError,
-} from '../src/lib/chrome-tabs.ts';
+} from '../src/lib/youtube-client.ts';
 
 const content = readFileSync(
   new URL('../dist/content.js', import.meta.url),
@@ -379,7 +379,7 @@ test('popup client queries the active watch tab and sends a typed request to its
       },
     },
   };
-  const tabId = await getActiveYouTubeTabId();
+  const { tabId } = await getActiveYouTubeTab();
   const response = await sendYouTubeMessage(tabId, {
     type: YOUTUBE_MESSAGE.GET_SNAPSHOT,
   });
@@ -410,7 +410,7 @@ test('popup client rejects unsupported tabs, invalid replies and disconnected co
     },
   };
   await assert.rejects(
-    getActiveYouTubeTabId(),
+    getActiveYouTubeTab(),
     /Not a supported YouTube video/,
   );
   await assert.rejects(
@@ -467,5 +467,17 @@ test('client distinguishes a missing receiver from an incompatible old response 
     sendYouTubeMessage(42, { type: YOUTUBE_MESSAGE.GET_SNAPSHOT }),
     { code: 'INVALID_RESPONSE' },
   );
-  await assert.rejects(getActiveYouTubeTabId(), { code: 'TAB_UNAVAILABLE' });
+  await assert.rejects(getActiveYouTubeTab(), { code: 'TAB_UNAVAILABLE' });
+});
+
+test('snapshot refuses stale canonical metadata during SPA navigation and recovers when metadata catches up', () => {
+  const { state, dispatch, document } = fixture();
+  const querySelector = document.querySelector.bind(document);
+  let canonical = 'https://www.youtube.com/watch?v=first';
+  document.querySelector = (selector) => selector === 'link[rel="canonical"]' ? { getAttribute: () => canonical } : querySelector(selector);
+  state.href = 'https://www.youtube.com/watch?v=second';
+  assert.equal(dispatch({ type: YOUTUBE_MESSAGE.GET_SNAPSHOT }).response.ok, false);
+  canonical = state.href; state.heading = 'Second video title';
+  const response = dispatch({ type: YOUTUBE_MESSAGE.GET_SNAPSHOT }).response;
+  assert.equal(response.ok, true); assert.equal(response.snapshot.videoId, 'second'); assert.equal(response.snapshot.title, 'Second video title');
 });

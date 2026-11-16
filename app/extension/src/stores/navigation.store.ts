@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { navigationStateSchema } from '../schemas/navigation.schema.ts';
-import { sessionStorage } from '../storage/session-storage.ts';
+import { chromeSessionStorage } from '../lib/chrome-session-storage.ts';
 import type { NavigationState, NavigationStore } from '../types/navigation.ts';
 
 function initialState(): NavigationState {
@@ -17,7 +17,7 @@ export function createNavigationStore() {
     {
       name: 'audiomint-navigation-v1',
       version: 1,
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => chromeSessionStorage),
       skipHydration: true,
       partialize: ({ view }) => ({ view }),
       merge: (saved, current) => {

@@ -1,5 +1,5 @@
 import type { SongSearchResponse } from '../types/song.ts';
-import { songSearchResponseSchema } from '../schemas/songs.schema.ts';
+import { songSearchResponseSchema, songDetailSchema } from '../schemas/songs.schema.ts';
 import { apiClient } from './api-client.ts';
 
 export async function searchSongs(
@@ -14,5 +14,12 @@ export async function searchSongs(
   if (!result.success) {
     throw new Error('The backend returned an invalid song search response.');
   }
+  return result.data;
+}
+
+export async function getSongDetail(id: number, signal?: AbortSignal) {
+  const { data } = await apiClient.get<unknown>('/songs/' + id, { signal });
+  const result = songDetailSchema.safeParse(data);
+  if (!result.success) throw new Error('The backend returned an invalid song detail response.');
   return result.data;
 }

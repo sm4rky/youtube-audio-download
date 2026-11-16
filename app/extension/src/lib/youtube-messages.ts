@@ -1,7 +1,21 @@
 import type {
   PopupToContentMessage,
   YouTubeContentResponse,
+  YouTubePlaybackMessage,
 } from '../types/youtube.ts';
+
+export const YOUTUBE_PLAYBACK_PORT = 'audiomint-playback';
+
+export function isYouTubePlaybackMessage(
+  value: unknown,
+): value is YouTubePlaybackMessage {
+  return (
+    isRecord(value) &&
+    (value.videoId === null || typeof value.videoId === 'string') &&
+    typeof value.available === 'boolean' &&
+    isYouTubeContentResponse(value.response)
+  );
+}
 
 export const YOUTUBE_MESSAGE = {
   GET_SNAPSHOT: 'youtube/get-snapshot',

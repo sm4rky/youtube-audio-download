@@ -19,6 +19,20 @@ export default defineConfig(({ mode }) => {
   }
   return {
     base: './',
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              {
+                name: 'react-vendor',
+                test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+              },
+            ],
+          },
+        },
+      },
+    },
     define: {
       'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiUrl.href.replace(/\/+$/, '')),
     },

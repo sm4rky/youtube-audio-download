@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
-import { searchSongs } from '../api/songs.api.ts';
+import { searchSongs, getSongDetail } from '../api/songs.api.ts';
 import {
   SEARCH_QUERY_MAX_LENGTH,
   searchQueryLength,
@@ -15,5 +15,12 @@ export function songSearchOptions(query: string) {
     // Guard imperative query callers too: fetchQuery does not honor enabled.
     queryFn: ({ signal }) => searchSongs(validateManualQuery(value), signal),
     enabled: length >= 1 && length <= SEARCH_QUERY_MAX_LENGTH,
+  });
+}
+
+export function songDetailOptions(id: number | null) {
+  return queryOptions({ queryKey: ['songs', 'detail', id] as const,
+    enabled: id !== null && Number.isSafeInteger(id) && id > 0,
+    queryFn: ({ signal }) => { if (id === null || !Number.isSafeInteger(id) || id <= 0) throw new Error('Invalid song identity.'); return getSongDetail(id, signal); },
   });
 }

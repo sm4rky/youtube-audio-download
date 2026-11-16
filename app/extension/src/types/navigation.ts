@@ -1,4 +1,4 @@
-export type MainView = 'loading' | 'search-results';
+export type MainView = 'loading' | 'search-results' | 'song-details';
 
 export interface NavigationState {
   view: MainView;

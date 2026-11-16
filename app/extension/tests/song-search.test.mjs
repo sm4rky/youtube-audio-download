@@ -7,7 +7,7 @@ import {
   searchQueryLength,
 } from '../src/lib/song-title-normalizer.ts';
 import { createSongSearchStore, useSongSearchStore } from '../src/stores/song-search.store.ts';
-import { YouTubeClientError } from '../src/lib/chrome-tabs.ts';
+import { YouTubeClientError } from '../src/errors/youtube-client.error.ts';
 
 const examples = [
   [

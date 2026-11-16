@@ -4,8 +4,8 @@ import { QueryClient } from '@tanstack/react-query';
 import { persistQueryClientRestore, persistQueryClientSave } from '@tanstack/react-query-persist-client';
 import { createSongSearchStore } from '../src/stores/song-search.store.ts';
 import { createNavigationStore } from '../src/stores/navigation.store.ts';
-import { sessionStorage } from '../src/storage/session-storage.ts';
-import { searchCacheOptions, SEARCH_CACHE_MAX_AGE } from '../src/storage/query-cache-persister.ts';
+import { chromeSessionStorage } from '../src/lib/chrome-session-storage.ts';
+import { queryCachePersistOptions, QUERY_CACHE_MAX_AGE } from '../src/lib/query-cache-persister.ts';
 import { queryClient } from '../src/app/query-client.ts';
 
 function mockSessionStorage(t) {
@@ -164,20 +164,20 @@ test('successful search cache survives a new QueryClient and avoids another requ
   let requests = 0;
   const options = { queryKey: key, queryFn: async () => { requests += 1; return response; } };
   await first.fetchQuery(options);
-  await persistQueryClientSave({ queryClient: first, ...searchCacheOptions('A') });
+  await persistQueryClientSave({ queryClient: first, ...queryCachePersistOptions });
   const reopened = cache(t);
-  await persistQueryClientRestore({ queryClient: reopened, ...searchCacheOptions('A') });
+  await persistQueryClientRestore({ queryClient: reopened, ...queryCachePersistOptions });
   assert.deepEqual(await reopened.fetchQuery(options), response);
   assert.equal(requests, 1);
 });
 
-test('video identity buster rejects old results even when the query key is identical', async (t) => {
+test('legacy video-scoped cache is discarded by the new persistence version', async (t) => {
   const values = mockSessionStorage(t);
   const first = cache(t);
   first.setQueryData(key, response);
-  await persistQueryClientSave({ queryClient: first, ...searchCacheOptions('A') });
+  await persistQueryClientSave({ queryClient: first, ...queryCachePersistOptions, buster: 'audiomint-search-v1:A' });
   const reopened = cache(t);
-  await persistQueryClientRestore({ queryClient: reopened, ...searchCacheOptions('B') });
+  await persistQueryClientRestore({ queryClient: reopened, ...queryCachePersistOptions });
   assert.equal(reopened.getQueryData(key), undefined);
   assert.equal(values.has('audiomint-search-cache-v1'), false);
 });
@@ -188,7 +188,7 @@ test('persistence saves only successful song search queries and excludes unrelat
   client.setQueryData(key, response);
   client.setQueryData(['unrelated'], { value: 'do not persist' });
   await assert.rejects(client.fetchQuery({ queryKey: ['songs', 'search', 'Failed'], queryFn: () => Promise.reject(new Error('Failed')) }));
-  await persistQueryClientSave({ queryClient: client, ...searchCacheOptions('A') });
+  await persistQueryClientSave({ queryClient: client, ...queryCachePersistOptions });
   const saved = JSON.parse(values.get('audiomint-search-cache-v1'));
   assert.deepEqual(saved.clientState.queries.map((query) => query.queryKey), [key]);
   assert.deepEqual(saved.clientState.mutations, []);
@@ -199,13 +199,13 @@ test('expired and version-busted caches are discarded', async (t) => {
   for (const versionMismatch of [false, true]) {
     const client = cache(t);
     client.setQueryData(key, response);
-    await persistQueryClientSave({ queryClient: client, ...searchCacheOptions('A') });
+    await persistQueryClientSave({ queryClient: client, ...queryCachePersistOptions });
     const saved = JSON.parse(values.get('audiomint-search-cache-v1'));
     if (versionMismatch) saved.buster = 'old-version:A';
-    else saved.timestamp = Date.now() - SEARCH_CACHE_MAX_AGE - 1;
+    else saved.timestamp = Date.now() - QUERY_CACHE_MAX_AGE - 1;
     values.set('audiomint-search-cache-v1', JSON.stringify(saved));
     const reopened = cache(t);
-    await persistQueryClientRestore({ queryClient: reopened, ...searchCacheOptions('A') });
+    await persistQueryClientRestore({ queryClient: reopened, ...queryCachePersistOptions });
     assert.equal(reopened.getQueryData(key), undefined);
   }
 });
@@ -215,9 +215,9 @@ test('Chrome storage failures degrade to memory without blocking video initializ
   for (const method of ['get', 'set', 'remove']) {
     t.mock.method(globalThis.chrome.storage.session, method, async () => { throw new Error('Storage unavailable'); });
   }
-  assert.equal(await sessionStorage.getItem('missing'), null);
-  await sessionStorage.setItem('test', 'value');
-  await sessionStorage.removeItem('test');
+  assert.equal(await chromeSessionStorage.getItem('missing'), null);
+  await chromeSessionStorage.setItem('test', 'value');
+  await chromeSessionStorage.removeItem('test');
   const source = sourceStore('A');
   await source.persist.rehydrate();
   await source.getState().initialize();
