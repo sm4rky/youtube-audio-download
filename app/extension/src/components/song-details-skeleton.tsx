@@ -2,12 +2,12 @@ export function SongDetailsSkeleton() {
   return (
     <div role="status" className="flex min-h-0 flex-1 flex-col" aria-label="Loading song details">
       <span className="sr-only">Loading song details...</span>
-      <div aria-hidden="true" className="flex min-h-0 flex-1 animate-pulse flex-col gap-2 motion-reduce:animate-none">
-        <div className="flex min-h-[220px] flex-1 items-center justify-center">
-          <div className="aspect-square w-full max-w-[220px] rounded-2xl bg-[#2a1a11]/8" />
+      <div aria-hidden="true" className="flex min-h-0 flex-1 animate-pulse flex-col gap-1.5 motion-reduce:animate-none">
+        <div className="flex min-h-[180px] flex-1 items-center justify-center [container-type:size]">
+          <div className="size-[min(100cqw,100cqh)] rounded-2xl bg-[#2a1a11]/8" />
         </div>
-        <div className="flex h-7 shrink-0 justify-center">
-          <div className="h-full w-24 rounded-lg bg-[#2a1a11]/8" />
+        <div className="flex h-6 shrink-0 justify-center">
+          <div className="h-full w-20 rounded-lg bg-[#2a1a11]/8" />
         </div>
         <div className="shrink-0 space-y-1">
           <div className="h-7 w-3/4 rounded-md bg-[#2a1a11]/10" />

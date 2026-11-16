@@ -1,6 +1,7 @@
 import { getActiveYouTubeTab, sendYouTubeMessage } from './youtube-client.ts';
 import { isYouTubePlaybackMessage, YOUTUBE_PLAYBACK_PORT } from './youtube-messages.ts';
 import type { PlaybackConnection, PlaybackState } from '../types/playback.ts';
+import type { YouTubeVideoSnapshot } from '../types/youtube.ts';
 
 export function connectYouTubePlayback(
   videoId: string,
@@ -11,17 +12,18 @@ export function connectYouTubePlayback(
   let videoChanged = false;
   let port: chrome.runtime.Port | undefined;
   let tabId: number | undefined;
+  let lastSnapshot: YouTubeVideoSnapshot | null = null;
 
   function markUnavailable(): void {
     if (!disposed && !videoChanged) {
-      onState({ snapshot: null, available: false });
+      onState({ videoId, snapshot: lastSnapshot, available: false });
     }
   }
 
   function handleVideoChange(): void {
     if (disposed || videoChanged) return;
     videoChanged = true;
-    onState({ snapshot: null, available: false });
+    onState({ videoId, snapshot: null, available: false });
     onVideoChanged();
   }
 
@@ -36,8 +38,11 @@ export function connectYouTubePlayback(
       handleVideoChange();
       return;
     }
+    // Keep the last usable clock during temporary player failures and ad/media changes.
+    if (response.ok && message.available) lastSnapshot = response.snapshot;
     onState({
-      snapshot: response.ok ? response.snapshot : null,
+      videoId,
+      snapshot: lastSnapshot,
       available: response.ok && message.available,
     });
   }

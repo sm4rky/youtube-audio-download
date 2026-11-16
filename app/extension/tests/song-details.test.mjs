@@ -27,6 +27,22 @@ function chromeMock(t) {
 }
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
+test('temporary player failures freeze the last usable snapshot until real playback resumes', async (t) => {
+  const mock = chromeMock(t);
+  const states = [];
+  const connection = connectYouTubePlayback('A', (state) => states.push(state), () => assert.fail('Same video must retain its session'));
+  await tick();
+  const current = { ...snapshot, currentTimeMs: 12000 };
+  mock.emit({ videoId: 'A', available: true, response: { ok: true, snapshot: current } });
+  mock.emit({ videoId: 'A', available: false, response: { ok: true, snapshot: { ...snapshot, currentTimeMs: 0, durationMs: 15000 } } });
+  assert.deepEqual(states.at(-1), { videoId: 'A', snapshot: current, available: false });
+  mock.emit({ videoId: 'A', available: false, response: { ok: false, error: { code: 'PLAYER_UNAVAILABLE', message: 'Unavailable' } } });
+  assert.deepEqual(states.at(-1), { videoId: 'A', snapshot: current, available: false });
+  mock.emit({ videoId: 'A', available: true, response: { ok: true, snapshot: { ...snapshot, currentTimeMs: 2000 } } });
+  assert.equal(states.at(-1).snapshot.currentTimeMs, 2000);
+  connection.dispose();
+});
+
 test('playback receives initial and native clock/duration/pause/rate updates; media replacement preserves identity', async (t) => {
   const mock = chromeMock(t); const states = []; let changes = 0;
   const connection = connectYouTubePlayback('A', (state) => states.push(state), () => changes++);
@@ -137,6 +153,6 @@ test('malformed playback envelopes cannot change session identity or update play
   assert.equal(states.length, 0);
   assert.equal(changes, 0);
   mock.emit({ videoId: 'A', available: true, response: { ok: true, snapshot } });
-  assert.deepEqual(states.at(-1), { snapshot, available: true });
+  assert.deepEqual(states.at(-1), { videoId: 'A', snapshot, available: true });
   connection.dispose();
 });

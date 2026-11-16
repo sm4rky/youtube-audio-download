@@ -3,6 +3,7 @@ import { useIsRestoring, useQueryClient } from '@tanstack/react-query';
 import { useNavigationStore } from '../stores/navigation.store.ts';
 import { useSelectedSongStore } from '../stores/selected-song.store.ts';
 import { useSongSearchStore } from '../stores/song-search.store.ts';
+import { useSongDraftStore } from '../stores/song-draft.store.ts';
 import type { PopupSession } from '../types/popup-session.ts';
 
 // Restore the session and verify the video when the popup opens or the user retries.
@@ -26,6 +27,7 @@ export function usePopupSession(): PopupSession {
         useSongSearchStore.persist.rehydrate(),
         useNavigationStore.persist.rehydrate(),
         useSelectedSongStore.persist.rehydrate(),
+        useSongDraftStore.persist.rehydrate(),
       ]);
       if (!active) return;
       const previousVideo = useSongSearchStore.getState().videoId;
@@ -36,7 +38,12 @@ export function usePopupSession(): PopupSession {
       if (source.videoId !== previousVideo) {
         queryClient.clear();
         useSelectedSongStore.getState().selectSong(null);
+        useSongDraftStore.getState().clearDraft();
         useNavigationStore.getState().setView('loading');
+      }
+      const draft = useSongDraftStore.getState().draft;
+      if (draft && draft.videoId !== source.videoId) {
+        useSongDraftStore.getState().clearDraft();
       }
       // A restored Details view requires a selected song.
       if (

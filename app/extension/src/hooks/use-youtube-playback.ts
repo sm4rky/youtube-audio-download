@@ -8,7 +8,7 @@ export function useYouTubePlayback(
   videoId: string | null,
   onVideoChanged: () => void,
 ): PlaybackControls {
-  const [state, setState] = useState<PlaybackState>({ snapshot: null, available: false });
+  const [state, setState] = useState<PlaybackState | null>(null);
   const connection = useRef<PlaybackConnection | null>(null);
   const onVideoChangedRef = useRef(onVideoChanged);
 
@@ -33,8 +33,12 @@ export function useYouTubePlayback(
     };
   }, [videoId]);
 
+  const current = state?.videoId === videoId ? state : null;
   return {
-    ...state,
+    videoId,
+    snapshot: current?.snapshot ?? null,
+    available: current?.available ?? false,
+    initialized: current !== null,
     // Forward play/pause/seek commands. Actual player snapshots reconcile the UI.
     command: (message) => connection.current?.command(message),
   };

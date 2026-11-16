@@ -1,13 +1,12 @@
 import { YOUTUBE_MESSAGE } from '../lib/youtube-messages.ts';
 import type { SongDetailsScreenProps } from '../types/song-details.ts';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Music2, Play, Pause, Download, SlidersHorizontal, Pencil, RotateCcw, RotateCw } from 'lucide-react';
+import { Play, Pause, Download, SlidersHorizontal, Pencil, RotateCcw, RotateCw } from 'lucide-react';
 import { Button } from '../components/ui/button.tsx';
 import { SongSearchInput } from '../components/song-search-input.tsx';
 import { SongDetailsSkeleton } from '../components/song-details-skeleton.tsx';
-import { songDetailOptions } from '../queries/songs.queries.ts';
-import { useSelectedSongStore } from '../stores/selected-song.store.ts';
+import { useSongDetails } from '../hooks/use-song-details.ts';
+import { SongMedia } from '../components/song-media.tsx';
 import { useSongSearchStore } from '../stores/song-search.store.ts';
 import { useNavigationStore } from '../stores/navigation.store.ts';
 
@@ -18,12 +17,10 @@ function time(ms: number | null) {
 }
 
 export function SongDetailsScreen({ playback }: SongDetailsScreenProps) {
-  const selectedId = useSelectedSongStore((state) => state.selectedSongId);
+  const { selectedId, detail, draft, lines, pending, lyricsUnavailable } = useSongDetails(playback);
   const query = useSongSearchStore((state) => state.query);
   const [target, setTarget] = useState<number | null>(null);
-  const [failedArtwork, setFailedArtwork] = useState<string | null>(null);
-  const detail = useQuery(songDetailOptions(selectedId));
-  const song = detail.data;
+  const song = draft?.current.metadata;
   const snapshot = playback.snapshot;
   const duration = snapshot?.durationMs ?? null;
   const current = target ?? snapshot?.currentTimeMs ?? 0;
@@ -33,15 +30,18 @@ export function SongDetailsScreen({ playback }: SongDetailsScreenProps) {
     setTarget(null);
   };
   const artists = song ? song.primaryArtists.map((artist) => artist.name).join(', ') + (song.featuredArtists.length ? ' ft. ' + song.featuredArtists.map((artist) => artist.name).join(', ') : '') : '';
-  return <section className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pt-4 pb-1">
+  return <section className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pt-3 pb-1">
     <SongSearchInput key={query} id="detail-query" onSubmitted={() => useNavigationStore.getState().setView('search-results')} />
-    {selectedId === null ? <p role="status">Select a song from search results.</p> : detail.isPending ? <SongDetailsSkeleton /> : detail.isError ? <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 text-sm"><p>Song details are unavailable.</p><Button onClick={() => { void detail.refetch(); }}>Retry details</Button></div> : song && <>
-      <div className="flex min-h-[220px] flex-1 items-center justify-center" aria-label="Song media">
-        <div className="group relative flex aspect-square w-full max-w-[220px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#2a1a11]/6 shadow-lg">
-        {song.coverUrl && failedArtwork !== song.coverUrl ? <img src={song.coverUrl} alt={song.title + ' artwork'} referrerPolicy="no-referrer" onError={() => setFailedArtwork(song.coverUrl)} className="size-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04] motion-reduce:transform-none motion-reduce:transition-none" /> : <Music2 className="size-16 opacity-25" />}
-      </div>
-      </div>
-      <div className="flex shrink-0 justify-center"><Button variant="outline" size="sm" className="cursor-pointer rounded-lg border-[#2a1a11]/15 bg-transparent px-3 text-[11px] hover:bg-[#2a1a11]/5 active:scale-95 motion-reduce:transform-none"><Pencil className="size-3" />Edit Lyrics</Button></div>
+    {selectedId === null ? <p role="status">Select a song from search results.</p> : pending ? <SongDetailsSkeleton /> : detail.isError ? <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 text-sm"><p>Song details are unavailable.</p><Button onClick={() => { void detail.refetch(); }}>Retry details</Button></div> : song && <>
+      <SongMedia
+        key={draft.videoId + ':' + draft.geniusId}
+        title={song.title}
+        coverUrl={song.coverUrl}
+        lines={lyricsUnavailable ? [] : lines}
+        currentTimeMs={snapshot?.currentTimeMs ?? 0}
+      />
+      {lyricsUnavailable && <span className="sr-only" role="status">Lyrics are unavailable.</span>}
+      <div className="flex shrink-0 justify-center"><Button variant="outline" size="xs" className="cursor-pointer rounded-lg border-[#2a1a11]/15 bg-transparent px-2.5 text-[10px] hover:bg-[#2a1a11]/5 active:scale-95 motion-reduce:transform-none"><Pencil className="size-2.5" />Edit Lyrics</Button></div>
       <div className="min-w-0 shrink-0">
         <h1 title={song.title} className="truncate text-xl font-semibold tracking-tight">{song.title}</h1>
         {song.album && <p title={song.album.title} className="mt-1 cursor-pointer truncate text-[11px] opacity-55 transition-opacity hover:opacity-100">{song.album.title}</p>}

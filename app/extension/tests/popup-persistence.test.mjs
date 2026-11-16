@@ -179,7 +179,7 @@ test('legacy video-scoped cache is discarded by the new persistence version', as
   const reopened = cache(t);
   await persistQueryClientRestore({ queryClient: reopened, ...queryCachePersistOptions });
   assert.equal(reopened.getQueryData(key), undefined);
-  assert.equal(values.has('audiomint-search-cache-v1'), false);
+  assert.equal(values.has('audiomint-tanstack-query-cache-v1'), false);
 });
 
 test('persistence saves only successful song search queries and excludes unrelated data/errors/mutations', async (t) => {
@@ -189,7 +189,7 @@ test('persistence saves only successful song search queries and excludes unrelat
   client.setQueryData(['unrelated'], { value: 'do not persist' });
   await assert.rejects(client.fetchQuery({ queryKey: ['songs', 'search', 'Failed'], queryFn: () => Promise.reject(new Error('Failed')) }));
   await persistQueryClientSave({ queryClient: client, ...queryCachePersistOptions });
-  const saved = JSON.parse(values.get('audiomint-search-cache-v1'));
+  const saved = JSON.parse(values.get('audiomint-tanstack-query-cache-v1'));
   assert.deepEqual(saved.clientState.queries.map((query) => query.queryKey), [key]);
   assert.deepEqual(saved.clientState.mutations, []);
 });
@@ -200,10 +200,10 @@ test('expired and version-busted caches are discarded', async (t) => {
     const client = cache(t);
     client.setQueryData(key, response);
     await persistQueryClientSave({ queryClient: client, ...queryCachePersistOptions });
-    const saved = JSON.parse(values.get('audiomint-search-cache-v1'));
+    const saved = JSON.parse(values.get('audiomint-tanstack-query-cache-v1'));
     if (versionMismatch) saved.buster = 'old-version:A';
     else saved.timestamp = Date.now() - QUERY_CACHE_MAX_AGE - 1;
-    values.set('audiomint-search-cache-v1', JSON.stringify(saved));
+    values.set('audiomint-tanstack-query-cache-v1', JSON.stringify(saved));
     const reopened = cache(t);
     await persistQueryClientRestore({ queryClient: reopened, ...queryCachePersistOptions });
     assert.equal(reopened.getQueryData(key), undefined);

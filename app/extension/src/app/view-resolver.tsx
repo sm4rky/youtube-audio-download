@@ -1,5 +1,6 @@
 import { useYouTubePlayback } from '../hooks/use-youtube-playback.ts';
 import { useSelectedSongStore } from '../stores/selected-song.store.ts';
+import { useSongDraftStore } from '../stores/song-draft.store.ts';
 import { useEffect } from 'react';
 import { useIsRestoring, useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -23,6 +24,7 @@ export function ViewResolver({ onRetrySource }: { onRetrySource(): void }) {
   const videoId = useSongSearchStore((state) => state.videoId);
   const playback = useYouTubePlayback(!restoring && sourceStatus === 'ready' ? videoId : null, () => {
     useSelectedSongStore.getState().selectSong(null);
+    useSongDraftStore.getState().clearDraft();
     setView('loading');
     onRetrySource();
   });
